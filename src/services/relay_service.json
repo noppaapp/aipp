@@ -1,0 +1,10 @@
+{
+  "service_name": "AIPP_Anonymous_Relay_Service",
+  "version": "1.1",
+  "architecture": "STATELESS_RELAY",
+  "features": {
+    "bot_protection": "HARDWARE_ENFORCED",
+    "data_retention": "ZERO_LOGS",
+    "routing": "ANONYMOUS_MATCHING"
+  }
+}

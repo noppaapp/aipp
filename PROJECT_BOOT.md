@@ -9,7 +9,7 @@
 ## 1. CURRENT SYSTEM STATE
 * **Workspace Status:** ACTIVE (GitHub Codespaces)
 * **Governance Protocol:** AIPP v1.1 Operations Extension Enforced
-* **Active State:** [STAGE_06: ADAPTER_BOUNDARIES_ALIGNED]
+* **Active State:** [STAGE_07: SERVICE_RELAY_ALIGNED]
 
 ---
 
@@ -24,6 +24,7 @@
 | **TASK-05** | Bulut / Servis entegrasyon adımlarının planlanması | `COMPLETED` | TASK-04 |
 | **TASK-06** | Çekirdek iş akışı ve otomatik rezonans mantığının tanımlanması | `COMPLETED` | TASK-05 |
 | **TASK-07** | Sınır adaptörleri ve cihaz tabanlı yerel depolama kurgusu | `COMPLETED` | TASK-06 |
+| **TASK-08** | Servis katmanı, donanım korumalı bot engelleme ve anonim aktarım | `COMPLETED` | TASK-07 |
 
 ---
 
