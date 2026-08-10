@@ -1,0 +1,11 @@
+{
+  "engine": "AIPP_Core_Workflow",
+  "version": "1.1",
+  "automation": "RESONANCE_TRIGGERED",
+  "states": {
+    "IDLE": { "next": "SEEK" },
+    "SEEK": { "next": "RESONANCE_DETECTED", "trigger": "auto_resonance" },
+    "RESONANCE_DETECTED": { "next": "EXPAND", "trigger": "automated_transition" },
+    "EXPAND": { "next": "IDLE", "trigger": "session_close" }
+  }
+}
