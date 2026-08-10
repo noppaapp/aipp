@@ -1,15 +1,10 @@
-# AIPP Cloud Integration & Service Boundaries
+# AIPP Cloud Integration Standard
 
-**STATUS:** DRAFT / PROPOSED  
-**SECURITY MODEL:** Zero-PII / Privacy-by-Design  
+**STATUS:** CANONICAL TEMPLATE  
+**SCOPE:** Generic AI Project Governance Framework  
 
 ---
 
-## 1. TEMEL İLKELER
-* **Zero PII Storage:** Sunucu altyapısında hiçbir kişisel veri (PII) saklanmaz.
-* **Kriptografik Kimlik:** Kullanıcı ve cihaz kimlikleri yalnızca anonim UUID ve cihaz tabanlı anahtarlarla yönetilir.
-* **Stateless Relay:** Bulut servisleri yalnızca durum iletimi ve anonim doğrulama katmanı olarak çalışır.
-
-## 2. SERVİS SINIRLARI
-* **Veritabanı / Depolama:** Sunucu tarafında veri tutulmaz, veriler cihaz üzerinde yerel (local storage/bulk) depolanır.
-* **API Geçitleri:** Anonimleştirilmiş yetkilendirme mimarisi kullanılır.
+## 1. GENEL İLKELER
+* **Decoupled Architecture:** Protokol, herhangi bir uygulamanın (Noppa vb.) iş mantığından tamamen bağımsız çalışır.
+* **Data Minimization:** Veri işleme sınırları projeden bağımsız olarak yönetişim kurallarına tabidir.
