@@ -24,6 +24,6 @@
     "pending_approval": null,
     "last_action": "INITIALIZATION"
   },
-  "step": 1,
+  "step": 2,
   "runner_engine": "GitHub Actions Autonomous Cloud Runner"
 }
