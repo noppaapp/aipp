@@ -22,6 +22,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install google-api-python-client google-auth
 
+      - name: Create credentials.json from Secret
+        run: |
+          echo '${{ secrets.GDRIVE_CREDENTIALS }}' > credentials.json
+
       - name: Run AIPP Runner
         env:
           AIPP_ADAPTER: gdrive
