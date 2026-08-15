@@ -1,5 +1,8 @@
+
 import os
+import sys
 import json
+import argparse
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -20,12 +23,23 @@ def upload_to_gdrive(file_path, folder_id):
     print(f"[*] Dosya başarıyla yüklendi. Drive File ID: {file.get('id')}")
 
 def main():
-    workspace_dir = os.getcwd()
+    parser = argparse.ArgumentParser(description="AIPP Autonomous Runner")
+    parser.add_argument("command", nargs="?", default="BAŞLA", help="Command to execute")
+    parser.add_argument("--workspace", default=".", help="Workspace directory")
+    args = parser.parse_args()
+
+    print(f"[*] AIPP Runner baslatildi. Komut: {args.command}, Calisma alani: {args.workspace}")
+
+    workspace_dir = args.workspace
     state_path = os.path.join(workspace_dir, "aipp_state.json")
     
+    # Mevcut state dosyasini oku veya olustur
     if os.path.exists(state_path):
         with open(state_path, "r", encoding="utf-8") as f:
-            state = json.load(f)
+            try:
+                state = json.load(f)
+            except Exception:
+                state = {"status": "INITIALIZED", "step": 0}
         print(f"[*] Mevcut state yüklendi: {state}")
     else:
         state = {"status": "INITIALIZED", "step": 0}
@@ -62,4 +76,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
