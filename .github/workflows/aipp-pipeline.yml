@@ -1,69 +1,31 @@
-import os
-import sys
-import json
-import argparse
-import io
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+name: AIPP Autonomous Pipeline
 
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+on:
+  workflow_dispatch:
 
-def get_drive_service():
-    creds_path = 'service_account.json'
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(f"Kimlik dosyası bulunamadı: {creds_path}")
-    creds = service_account.Credentials.from_service_account_file(creds_path, scopes=SCOPES)
-    return build('drive', 'v3', credentials=creds)
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-def upload_or_update_file(service, folder_id, filename, content, mimetype):
-    # İçeriği byte akışına dönüştür
-    if isinstance(content, str):
-        media_content = io.BytesIO(content.encode('utf-8'))
-    else:
-        media_content = io.BytesIO(content)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    media = MediaIoBaseUpload(media_content, mimetype=mimetype, resumable=True)
-    
-    # KRİTİK DÜZELTME: Dosyanın hangi klasöre yükleneceğini belirtiyoruz
-    file_metadata = {
-        'name': filename,
-        'parents': [folder_id]
-    }
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install google-api-python-client google-auth
 
-    file = service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields='id'
-    ).execute()
-    
-    print(f"Dosya başarıyla yüklendi! Drive Dosya ID: {file.get('id')}")
+      - name: Create service_account.json from Secret
+        run: |
+          echo '${{ secrets.GDRIVE_CREDENTIALS }}' > service_account.json
 
-def main():
-    parser = argparse.ArgumentParser(description="AIPP Runner")
-    parser.add_argument("command", nargs="?", default="BAŞLA")
-    parser.add_argument("--workspace", default=".")
-    args = parser.parse_args()
-
-    print(f"Çalıştırılıyor: Komut={args.command}, Workspace={args.workspace}")
-
-    # GitHub Secrets'tan gelen GDRIVE_FOLDER_ID değerini ortam değişkeninden alıyoruz
-    folder_id = os.environ.get("GDRIVE_FOLDER_ID")
-    if not folder_id:
-        raise ValueError("GDRIVE_FOLDER_ID ortam değişkeni bulunamadı! Lütfen GitHub Secrets ayarlarını kontrol edin.")
-
-    service = get_drive_service()
-
-    # Örnek durum (state) verisi
-    state_data = {
-        "status": "RUNNING",
-        "command": args.command,
-        "workspace": args.workspace
-    }
-    state_json = json.dumps(state_data, indent=2)
-
-    # Google Drive'a yükleme fonksiyonunu çağır
-    upload_or_update_file(service, folder_id, "aipp_state.json", state_json, "application/json")
-
-if __name__ == "__main__":
-    main()
+      - name: Run AIPP Runner
+        env:
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          python aipp_runner.py BAŞLA --workspace "."
