@@ -1,36 +1,30 @@
-name: AIPP Autonomous Runner
+name: Run AIPP Autonomous Pipeline
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-
-permissions:
-  contents: write
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   run-aipp:
     runs-on: ubuntu-latest
-    env:
-      AIPP_ADAPTER: gdrive
-      AIPP_GDRIVE_FOLDER: 1T0D9OOy434ztQbHDJePISTV93Lipvdif
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-     
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
+        uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-          create_credentials_file: true
-          credentials_file_path: 'credentials.json'
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-api-python-client google-auth
 
       - name: Run AIPP Runner
+        env:
+          AIPP_ADAPTER: gdrive
+          AIPP_GDRIVE_FOLDER: "1T0D9OOy434ztQbHDJePISTV93Lipvdif"
         run: |
-          python aipp_runner.py BASLA --workspace "."
+          python aipp_runner.py BAŞLA --workspace "."
