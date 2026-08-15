@@ -1,0 +1,5 @@
+{
+  "status": "PROPOSAL_READY",
+  "step": 1,
+  "runner_engine": "GitHub Actions Autonomous Cloud Runner"
+}
