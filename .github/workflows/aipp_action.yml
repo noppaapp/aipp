@@ -21,16 +21,13 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          create_credentials_file: true
+          credentials_file_path: 'credentials.json'
+
       - name: Run AIPP Runner
         run: |
-          python aipp_runner.py BAŞLA --workspace "."
-
-      - name: Create Authority Gate PR
-        if: success()
-        run: |
-          git config user.name "AIPP Agent"
-          git config user.email "aipp@noppaapp.com"
-          git checkout -b aipp-proposal-$(date +%s)
-          git add .
-          git diff --staged --quiet || git commit -m "AIPP: Yeni öneri ve state güncellemesi"
-          git push --set-upstream origin HEAD
+          python aipp_runner.py BASLA --workspace "."
