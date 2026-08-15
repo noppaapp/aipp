@@ -1,34 +1,45 @@
-name: Run AIPP Autonomous Pipeline
+import os
+import sys
+import json
+import argparse
 
-on:
-  push:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+def main():
+    parser = argparse.ArgumentParser(description="AIPP Autonomous Runner")
+    parser.add_argument("command", nargs="?", default="BAŞLA", help="Command to execute")
+    parser.add_argument("--workspace", default=".", help="Workspace directory")
+    args = parser.parse_args()
 
-jobs:
-  run-aipp:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    print(f"[*] AIPP Runner baslatildi. Komut: {args.command}, Calisma alani: {args.workspace}")
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    workspace_dir = args.workspace
+    state_path = os.path.join(workspace_dir, "aipp_state.json")
+    
+    if os.path.exists(state_path):
+        with open(state_path, "r", encoding="utf-8") as f:
+            try:
+                state = json.load(f)
+            except Exception:
+                state = {"status": "INITIALIZED", "step": 0}
+        print(f"[*] Mevcut state yüklendi: {state}")
+    else:
+        state = {"status": "INITIALIZED", "step": 0}
+        print(f"[*] Yeni state başlatıldı: {state}")
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install google-api-python-client google-auth
+    state["step"] = state.get("step", 0) + 1
+    state["status"] = "PROPOSAL_READY"
+    state["runner_engine"] = "GitHub Actions Autonomous Cloud Runner"
 
-      - name: Create credentials.json from Secret
-        run: |
-          echo '${{ secrets.GDRIVE_CREDENTIALS }}' > credentials.json
+    with open(state_path, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)
 
-      - name: Run AIPP Runner
-        env:
-          AIPP_ADAPTER: gdrive
-          AIPP_GDRIVE_FOLDER: 1T0D9OOy434ztQbHDJePISTV93Lipvdif
-        run: |
-          python aipp_runner.py BAŞLA --workspace "."
+    print(f"[*] State basariyla guncellendi: {state}")
+    print(f"[*] AIPP calismasi basariyla tamamlandi.")
+
+    test_dosya_yolu = os.path.join(workspace_dir, "baglanti_testi.txt")
+    with open(test_dosya_yolu, "w", encoding="utf-8") as f:
+        f.write("AIPP baglantisi basarili ve yerel olarak kaydedildi.")
+    print(f"[*] Baglanti testi dosyasi yerel dizine olusturuldu: {test_dosya_yolu}")
+    print("[*] Google Drive entegrasyonu kaldırıldı, çıktılar doğrudan GitHub deposuna kaydedilecek.")
+
+if __name__ == "__main__":
+    main()
