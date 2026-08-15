@@ -39,4 +39,8 @@ def main():
     print("[*] AIPP calismasi basariyla tamamlandi.")
 
 if __name__ == "__main__":
-    main()
+    main()# Test dosyasi olusturarak Drive baglantisini dogrulama
+    test_dosya_yolu = os.path.join(workspace_dir, "baglanti_testi.txt")
+    with open(test_dosya_yolu, "w", encoding="utf-8") as f:
+        f.write("AIPP baglantisi basarili.")
+    print("[*] Baglanti testi dosyasi olusturuldu.")
