@@ -24,18 +24,31 @@ def upload_or_update_file(service, folder_id, filename, content, mimetype):
 
     media = MediaIoBaseUpload(media_content, mimetype=mimetype, resumable=True)
     
-    file_metadata = {
-        'name': filename,
-        'parents': [folder_id]
-    }
+    # Klasör içinde bu isimde dosya var mı arayalım
+    query = f"name = '{filename}' and '{folder_id}' in parents and trashed = false"
+    results = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+    files = results.get('files', [])
 
-    file = service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields='id'
-    ).execute()
-    
-    print(f"Dosya başarıyla yüklendi! Drive Dosya ID: {file.get('id')}")
+    if files:
+        # Dosya zaten varsa güncelle (update) -> Kota sorununu engeller
+        file_id = files[0]['id']
+        file = service.files().update(
+            fileId=file_id,
+            media_body=media
+        ).execute()
+        print(f"Mevcut dosya başarıyla güncellendi! Drive Dosya ID: {file.get('id')}")
+    else:
+        # Dosya yoksa ilk kez oluştur
+        file_metadata = {
+            'name': filename,
+            'parents': [folder_id]
+        }
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+        print(f"Yeni dosya başarıyla oluşturuldu! Drive Dosya ID: {file.get('id')}")
 
 def main():
     parser = argparse.ArgumentParser(description="AIPP Runner")
