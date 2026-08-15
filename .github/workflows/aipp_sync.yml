@@ -21,7 +21,7 @@ jobs:
         env:
           GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
-          DRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
         run: |
           python -c '
           import os, urllib.request, json, urllib.parse
@@ -29,15 +29,12 @@ jobs:
           refresh_token = os.environ["GCP_REFRESH_TOKEN"]
           folder_id = os.environ["DRIVE_FOLDER_ID"]
           
-          # Credentials değişkeninden client_id ve client_secret çözümleme
-          # (Eğer JSON formatındaysa veya aralarında boşluk/iki nokta varsa)
           raw_creds = os.environ["GDRIVE_CREDENTIALS"]
           try:
               creds_json = json.loads(raw_creds)
               client_id = creds_json.get("client_id") or creds_json.get("installed", {}).get("client_id")
               client_secret = creds_json.get("client_secret") or creds_json.get("installed", {}).get("client_secret")
           except:
-              # JSON değilse düz metin olarak bölmeyi dene
               parts = raw_creds.replace(";", " ").split()
               client_id = parts[0]
               client_secret = parts[1]
@@ -55,9 +52,10 @@ jobs:
           access_token = json.loads(res.read().decode("utf-8"))["access_token"]
           print("Access token başarıyla alındı.")
 
-          # 2. Drive'\''da aipp_state.json dosyasını ara
+          # 2. Drive'\''da aipp_state.json dosyasını ara (urllib.parse ile hatasız sorgu)
           file_name = "aipp_state.json"
-          search_url = f"https://www.googleapis.com/drive/v3/files?q=\'\''name='"'\{file_name}\''" and '\''{folder_id}'\'' in parents and trashed=false'\''"
+          query = f"name = '\''{file_name}'\'' and '\''{folder_id}'\'' in parents and trashed = false"
+          search_url = f"https://www.googleapis.com/drive/v3/files?{urllib.parse.urlencode({\"q\": query})"
           
           req = urllib.request.Request(search_url, headers={"Authorization": f"Bearer {access_token}"})
           response = urllib.request.urlopen(req)
