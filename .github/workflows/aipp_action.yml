@@ -6,6 +6,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   run-aipp:
     runs-on: ubuntu-latest
@@ -29,5 +32,5 @@ jobs:
           git config user.email "aipp@noppaapp.com"
           git checkout -b aipp-proposal-$(date +%s)
           git add .
-          git commit -m "AIPP: Yeni öneri ve state güncellemesi"
-          git push origin HEAD
+          git diff --staged --quiet || git commit -m "AIPP: Yeni öneri ve state güncellemesi"
+          git push --set-upstream origin HEAD
