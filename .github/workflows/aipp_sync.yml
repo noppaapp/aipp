@@ -1,0 +1,106 @@
+name: AIPP State Sync to Google Drive
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Sync aipp_state.json with Google Drive
+        env:
+          GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          DRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          python -c '
+          import os, urllib.request, json, urllib.parse
+
+          refresh_token = os.environ["GCP_REFRESH_TOKEN"]
+          folder_id = os.environ["DRIVE_FOLDER_ID"]
+          
+          # Credentials değişkeninden client_id ve client_secret çözümleme
+          # (Eğer JSON formatındaysa veya aralarında boşluk/iki nokta varsa)
+          raw_creds = os.environ["GDRIVE_CREDENTIALS"]
+          try:
+              creds_json = json.loads(raw_creds)
+              client_id = creds_json.get("client_id") or creds_json.get("installed", {}).get("client_id")
+              client_secret = creds_json.get("client_secret") or creds_json.get("installed", {}).get("client_secret")
+          except:
+              # JSON değilse düz metin olarak bölmeyi dene
+              parts = raw_creds.replace(";", " ").split()
+              client_id = parts[0]
+              client_secret = parts[1]
+
+          # 1. Refresh Token ile Access Token Al
+          data = urllib.parse.urlencode({
+              "client_id": client_id,
+              "client_secret": client_secret,
+              "refresh_token": refresh_token,
+              "grant_type": "refresh_token"
+          }).encode("utf-8")
+
+          req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+          res = urllib.request.urlopen(req)
+          access_token = json.loads(res.read().decode("utf-8"))["access_token"]
+          print("Access token başarıyla alındı.")
+
+          # 2. Drive'\''da aipp_state.json dosyasını ara
+          file_name = "aipp_state.json"
+          search_url = f"https://www.googleapis.com/drive/v3/files?q=\'\''name='"'\{file_name}\''" and '\''{folder_id}'\'' in parents and trashed=false'\''"
+          
+          req = urllib.request.Request(search_url, headers={"Authorization": f"Bearer {access_token}"})
+          response = urllib.request.urlopen(req)
+          files = json.loads(response.read().decode("utf-8"))["files"]
+
+          local_file_path = "aipp_state.json"
+          if not os.path.exists(local_file_path):
+              with open(local_file_path, "w") as f:
+                  json.dump({"state": "initialized"}, f)
+
+          file_metadata = {"name": file_name, "parents": [folder_id]}
+          
+          with open(local_file_path, "rb") as f:
+              file_content = f.read()
+
+          boundary = "foo_bar_baz"
+          body = (
+              f"--{boundary}\r\n"
+              f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
+              f"{json.dumps(file_metadata)}\r\n"
+              f"--{boundary}\r\n"
+              f"Content-Type: application/json\r\n\r\n"
+          ).encode("utf-8") + file_content + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+          if files:
+              file_id = files[0]["id"]
+              print(f"Mevcut dosya güncelleniyor (ID: {file_id})...")
+              upload_url = f"https://www.googleapis.com/upload/drive/v3/files/{file_id}?uploadType=multipart"
+              method = "PATCH"
+          else:
+              print("Yeni dosya oluşturuluyor...")
+              upload_url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
+              method = "POST"
+
+          req = urllib.request.Request(
+              upload_url,
+              data=body,
+              headers={
+                  "Authorization": f"Bearer {access_token}",
+                  "Content-Type": f"multipart/related; boundary={boundary}"
+              },
+              method=method
+          )
+          resp = urllib.request.urlopen(req)
+          print("Senkronizasyon başarıyla tamamlandı, HTTP Status:", resp.status)
+          '
