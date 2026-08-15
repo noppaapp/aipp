@@ -1,4 +1,3 @@
-
 import os
 import sys
 import json
@@ -33,7 +32,6 @@ def main():
     workspace_dir = args.workspace
     state_path = os.path.join(workspace_dir, "aipp_state.json")
     
-    # Mevcut state dosyasini oku veya olustur
     if os.path.exists(state_path):
         with open(state_path, "r", encoding="utf-8") as f:
             try:
@@ -45,25 +43,21 @@ def main():
         state = {"status": "INITIALIZED", "step": 0}
         print(f"[*] Yeni state başlatıldı: {state}")
 
-    # Protokol adımını ilerlet ve state'i guncelle
     state["step"] = state.get("step", 0) + 1
     state["status"] = "PROPOSAL_READY"
     state["runner_engine"] = "GitHub Actions Autonomous Cloud Runner"
 
-    # State dosyasini kaydet
     with open(state_path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
 
     print(f"[*] State basariyla guncellendi: {state}")
     print(f"[*] AIPP calismasi basariyla tamamlandi.")
 
-    # Test dosyasi olusturarak Drive baglantisini dogrulama
     test_dosya_yolu = os.path.join(workspace_dir, "baglanti_testi.txt")
     with open(test_dosya_yolu, "w", encoding="utf-8") as f:
         f.write("AIPP baglantisi basarili.")
     print(f"[*] Baglanti testi dosyasi olusturuldu.")
 
-    # Google Drive adaptör kontrolü ve yükleme
     adapter = os.getenv("AIPP_ADAPTER")
     folder_id = os.getenv("AIPP_GDRIVE_FOLDER")
     if adapter == "gdrive" and folder_id:
