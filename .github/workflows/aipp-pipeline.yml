@@ -26,9 +26,7 @@ jobs:
         env:
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
         run: |
-          cat << 'EOF' > service_account.json
-          ${{ secrets.GDRIVE_CREDENTIALS }}
-          EOF
+          python -c 'import os; open("service_account.json", "w").write(os.environ["GDRIVE_CREDENTIALS"])'
 
       - name: Run Runner
         env:
