@@ -7,7 +7,8 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+# BU SATIRI DEĞİŞTİRDİK (Artık tüm dosyaları görebilir)
+SCOPES = ['https://www.googleapis.com/auth/drive']
 
 def get_drive_service():
     creds_path = 'service_account.json'
@@ -24,13 +25,12 @@ def upload_or_update_file(service, folder_id, filename, content, mimetype):
 
     media = MediaIoBaseUpload(media_content, mimetype=mimetype, resumable=True)
     
-    # Klasör içinde bu isimde dosya var mı arayalım
+    # Artık 'drive' yetkisiyle dosyayı bulabileceğiz
     query = f"name = '{filename}' and '{folder_id}' in parents and trashed = false"
     results = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
     files = results.get('files', [])
 
     if files:
-        # Dosya varsa güvenli bir şekilde güncelle
         file_id = files[0]['id']
         file = service.files().update(
             fileId=file_id,
@@ -38,12 +38,8 @@ def upload_or_update_file(service, folder_id, filename, content, mimetype):
         ).execute()
         print(f"Mevcut dosya başarıyla güncellendi! Drive Dosya ID: {file.get('id')}")
     else:
-        raise FileNotFoundError(
-            f"'{filename}' adlı dosya hedef klasörde bulunamadı! "
-            "Servis hesaplarının kişisel Drive klasörlerinde yeni dosya oluşturma kotası yoktur. "
-            "Lütfen Google Drive klasörünün içine boş bir 'aipp_state.json' dosyası manuel olarak oluşturun "
-            "ve servis hesabınızla düzenleme yetkisiyle paylaşın."
-        )
+        # Eğer hala bulamıyorsa (dosya yoksa), hata ver ki kota hatasıyla uğraşmayalım
+        raise FileNotFoundError(f"'{filename}' bulunamadı. Lütfen klasör içinde olduğundan emin ol.")
 
 def main():
     parser = argparse.ArgumentParser(description="AIPP Runner")
@@ -51,11 +47,10 @@ def main():
     parser.add_argument("--workspace", default=".")
     args = parser.parse_args()
 
-    print(f"Çalıştırılıyor: Komut={args.command}, Workspace={args.workspace}")
-
+    # Ortam değişkeninden klasör ID'sini al
     folder_id = os.environ.get("GDRIVE_FOLDER_ID")
     if not folder_id:
-        raise ValueError("GDRIVE_FOLDER_ID ortam değişkeni bulunamadı! Lütfen GitHub Secrets ayarlarını kontrol edin.")
+        raise ValueError("GDRIVE_FOLDER_ID bulunamadı!")
 
     service = get_drive_service()
 
