@@ -1,1 +1,33 @@
+name: AIPP Autonomous Runner
 
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  run-aipp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Run AIPP Runner
+        run: |
+          python aipp_runner.py BAŞLA --workspace "."
+
+      - name: Create Authority Gate PR
+        if: success()
+        run: |
+          git config user.name "AIPP Agent"
+          git config user.email "aipp@noppaapp.com"
+          git checkout -b aipp-proposal-$(date +%s)
+          git add .
+          git commit -m "AIPP: Yeni öneri ve state güncellemesi"
+          git push origin HEAD
