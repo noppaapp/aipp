@@ -1,5 +1,5 @@
 {
   "status": "PROPOSAL_READY",
-  "step": 1,
+  "step": 2,
   "runner_engine": "GitHub Actions Autonomous Cloud Runner"
 }
