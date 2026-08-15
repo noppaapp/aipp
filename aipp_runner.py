@@ -30,7 +30,7 @@ def upload_or_update_file(service, folder_id, filename, content, mimetype):
     files = results.get('files', [])
 
     if files:
-        # Dosya zaten varsa güncelle (update) -> Kota sorununu engeller
+        # Dosya varsa güvenli bir şekilde güncelle
         file_id = files[0]['id']
         file = service.files().update(
             fileId=file_id,
@@ -38,17 +38,12 @@ def upload_or_update_file(service, folder_id, filename, content, mimetype):
         ).execute()
         print(f"Mevcut dosya başarıyla güncellendi! Drive Dosya ID: {file.get('id')}")
     else:
-        # Dosya yoksa ilk kez oluştur
-        file_metadata = {
-            'name': filename,
-            'parents': [folder_id]
-        }
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
-        ).execute()
-        print(f"Yeni dosya başarıyla oluşturuldu! Drive Dosya ID: {file.get('id')}")
+        raise FileNotFoundError(
+            f"'{filename}' adlı dosya hedef klasörde bulunamadı! "
+            "Servis hesaplarının kişisel Drive klasörlerinde yeni dosya oluşturma kotası yoktur. "
+            "Lütfen Google Drive klasörünün içine boş bir 'aipp_state.json' dosyası manuel olarak oluşturun "
+            "ve servis hesabınızla düzenleme yetkisiyle paylaşın."
+        )
 
 def main():
     parser = argparse.ArgumentParser(description="AIPP Runner")
