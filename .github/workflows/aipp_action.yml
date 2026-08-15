@@ -1,45 +1,32 @@
-import os
-import sys
-import json
-import argparse
+name: Run AIPP Autonomous Pipeline
 
-def main():
-    parser = argparse.ArgumentParser(description="AIPP Autonomous Runner")
-    parser.add_argument("command", nargs="?", default="BAŞLA", help="Command to execute")
-    parser.add_argument("--workspace", default=".", help="Workspace directory")
-    args = parser.parse_args()
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
-    print(f"[*] AIPP Runner baslatildi. Komut: {args.command}, Calisma alani: {args.workspace}")
+jobs:
+  run-aipp:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    workspace_dir = args.workspace
-    state_path = os.path.join(workspace_dir, "aipp_state.json")
-    
-    if os.path.exists(state_path):
-        with open(state_path, "r", encoding="utf-8") as f:
-            try:
-                state = json.load(f)
-            except Exception:
-                state = {"status": "INITIALIZED", "step": 0}
-        print(f"[*] Mevcut state yüklendi: {state}")
-    else:
-        state = {"status": "INITIALIZED", "step": 0}
-        print(f"[*] Yeni state başlatıldı: {state}")
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    state["step"] = state.get("step", 0) + 1
-    state["status"] = "PROPOSAL_READY"
-    state["runner_engine"] = "GitHub Actions Autonomous Cloud Runner"
+      - name: Run AIPP Runner
+        run: |
+          python aipp_runner.py BAŞLA --workspace "."
 
-    with open(state_path, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2, ensure_ascii=False)
-
-    print(f"[*] State basariyla guncellendi: {state}")
-    print(f"[*] AIPP calismasi basariyla tamamlandi.")
-
-    test_dosya_yolu = os.path.join(workspace_dir, "baglanti_testi.txt")
-    with open(test_dosya_yolu, "w", encoding="utf-8") as f:
-        f.write("AIPP baglantisi basarili ve yerel olarak kaydedildi.")
-    print(f"[*] Baglanti testi dosyasi yerel dizine olusturuldu: {test_dosya_yolu}")
-    print("[*] Google Drive entegrasyonu kaldırıldı, çıktılar doğrudan GitHub deposuna kaydedilecek.")
-
-if __name__ == "__main__":
-    main()
+      - name: Commit and push generated files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add aipp_state.json baglanti_testi.txt
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore: update AIPP state and test output [skip ci]"
+          git push
