@@ -13,12 +13,12 @@ jobs:
   run-aipp:
     runs-on: ubuntu-latest
     env:
-      AIPP_ADAPTER: "gdrive"
-      AIPP_GDRIVE_FOLDER: "1T0D9OOy434ztQbHDJePISTV93Lipvdif"
-      steps:
+      AIPP_ADAPTER: gdrive
+      AIPP_GDRIVE_FOLDER: 1T0D9OOy434ztQbHDJePISTV93Lipvdif
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
+     
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
