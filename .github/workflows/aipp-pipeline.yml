@@ -22,11 +22,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
 
-      - name: Authenticate Service Account
+      - name: Authenticate Service Account & Debug
         env:
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
         run: |
-          python -c 'import os; open("service_account.json", "w").write(os.environ["GDRIVE_CREDENTIALS"])'
+          python -c '
+          import os
+          creds = os.environ.get("GDRIVE_CREDENTIALS", "")
+          print(f"GDRIVE_CREDENTIALS uzunluğu: {len(creds)}")
+          if len(creds) == 0:
+              print("HATA: GDRIVE_CREDENTIALS ortam değişkeni boş geliyor! GitHub Secrets ayarlarını kontrol edin.")
+              exit(1)
+          with open("service_account.json", "w", encoding="utf-8") as f:
+              f.write(creds)
+          print("service_account.json başarıyla yazıldı.")
+          '
 
       - name: Run Runner
         env:
