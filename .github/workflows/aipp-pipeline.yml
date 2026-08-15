@@ -24,9 +24,9 @@ jobs:
 
       - name: Authenticate Service Account
         env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
         run: |
-          echo "$GCP_SA_KEY" > service_account.json
+          echo "$GDRIVE_CREDENTIALS" > service_account.json
 
       - name: Run Runner
         env:
