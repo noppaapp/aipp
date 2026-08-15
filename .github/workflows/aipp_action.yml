@@ -29,6 +29,6 @@ jobs:
       - name: Run AIPP Runner
         env:
           AIPP_ADAPTER: gdrive
-          AIPP_GDRIVE_FOLDER: "1T0D9OOy434ztQbHDJePISTV93Lipvdif"
+          AIPP_GDRIVE_FOLDER: "1mSjaFfsLQHtp1uwmHRpStlSSNYUsvWT_"
         run: |
           python aipp_runner.py BAŞLA --workspace "."
