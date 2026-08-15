@@ -19,6 +19,17 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Authenticate Google Service Account
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -n "$GCP_SA_KEY" ]; then
+            echo "$GCP_SA_KEY" > service_account.json
+            echo "Google Service Account key successfully injected."
+          else
+            echo "Warning: GCP_SA_KEY secret is not set."
+          fi
+
       - name: Run AIPP Runner
         run: |
           python aipp_runner.py BAŞLA --workspace "."
