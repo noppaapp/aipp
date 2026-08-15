@@ -1,6 +1,6 @@
 {
   "version": "1.1.1",
-  "status": "CANONICAL_FROZEN",
+  "status": "PROPOSAL_READY",
   "active_project": "Noppa",
   "execution_mode": "REAL",
   "task_lifecycle": {
@@ -23,5 +23,7 @@
   "authority_gate": {
     "pending_approval": null,
     "last_action": "INITIALIZATION"
-  }
+  },
+  "step": 1,
+  "runner_engine": "GitHub Actions Autonomous Cloud Runner"
 }
