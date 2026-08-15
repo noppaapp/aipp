@@ -24,21 +24,37 @@ jobs:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           python - <<'EOF'
-          import os, urllib.request, json, urllib.parse
+          import os, urllib.request, json, urllib.parse, sys
+          from urllib.error import HTTPError
 
-          refresh_token = os.environ["GCP_REFRESH_TOKEN"]
-          folder_id = os.environ["GDRIVE_FOLDER_ID"]
-          
-          # Credentials değişkeninden client_id ve client_secret çözümleme
-          raw_creds = os.environ["GDRIVE_CREDENTIALS"]
+          refresh_token = os.environ.get("GCP_REFRESH_TOKEN", "").strip()
+          folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+          raw_creds = os.environ.get("GDRIVE_CREDENTIALS", "").strip()
+
+          if not all([refresh_token, folder_id, raw_creds]):
+              print("HATA: GitHub Secrets eksik okunuyor! Lütfen secret isimlerini kontrol et.")
+              sys.exit(1)
+
           try:
               creds_json = json.loads(raw_creds)
-              client_id = creds_json.get("client_id") or creds_json.get("installed", {}).get("client_id")
-              client_secret = creds_json.get("client_secret") or creds_json.get("installed", {}).get("client_secret")
+              client_id = creds_json.get("client_id") or creds_json.get("installed", {}).get("client_id") or creds_json.get("web", {}).get("client_id")
+              client_secret = creds_json.get("client_secret") or creds_json.get("installed", {}).get("client_secret") or creds_json.get("web", {}).get("client_secret")
           except:
               parts = raw_creds.replace(";", " ").split()
-              client_id = parts[0]
-              client_secret = parts[1]
+              if len(parts) >= 2:
+                  client_id = parts[0]
+                  client_secret = parts[1]
+              else:
+                  print("HATA: GDRIVE_CREDENTIALS formatı anlaşılamadı.")
+                  sys.exit(1)
+
+          print(f"DEBUG: Client ID bulundu ({len(client_id) if client_id else 0} karakter)")
+          print(f"DEBUG: Client Secret bulundu ({len(client_secret) if client_secret else 0} karakter)")
+          print(f"DEBUG: Refresh Token bulundu ({len(refresh_token) if refresh_token else 0} karakter)")
+
+          if not client_id or not client_secret:
+              print("HATA: client_id veya client_secret ayrıştırılamadı. GDRIVE_CREDENTIALS içeriğini kontrol et.")
+              sys.exit(1)
 
           # 1. Refresh Token ile Access Token Al
           data = urllib.parse.urlencode({
@@ -49,9 +65,16 @@ jobs:
           }).encode("utf-8")
 
           req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
-          res = urllib.request.urlopen(req)
-          access_token = json.loads(res.read().decode("utf-8"))["access_token"]
-          print("Access token başarıyla alındı.")
+          req.add_header("Content-Type", "application/x-www-form-urlencoded")
+          
+          try:
+              res = urllib.request.urlopen(req)
+              access_token = json.loads(res.read().decode("utf-8"))["access_token"]
+              print("Access token başarıyla alındı.")
+          except HTTPError as e:
+              print("Google OAuth Hatası:", e.code)
+              print("Detay:", e.read().decode("utf-8"))
+              sys.exit(1)
 
           # 2. Drive'da aipp_state.json dosyasını ara
           file_name = "aipp_state.json"
@@ -59,8 +82,13 @@ jobs:
           search_url = f"https://www.googleapis.com/drive/v3/files?{urllib.parse.urlencode({'q': query})}"
           
           req = urllib.request.Request(search_url, headers={"Authorization": f"Bearer {access_token}"})
-          response = urllib.request.urlopen(req)
-          files = json.loads(response.read().decode("utf-8"))["files"]
+          try:
+              response = urllib.request.urlopen(req)
+              files = json.loads(response.read().decode("utf-8"))["files"]
+          except HTTPError as e:
+              print("Google Drive API Arama Hatası:", e.code)
+              print("Detay:", e.read().decode("utf-8"))
+              sys.exit(1)
 
           local_file_path = "aipp_state.json"
           if not os.path.exists(local_file_path):
@@ -100,6 +128,12 @@ jobs:
               },
               method=method
           )
-          resp = urllib.request.urlopen(req)
-          print("Senkronizasyon başarıyla tamamlandı, HTTP Status:", resp.status)
+          
+          try:
+              resp = urllib.request.urlopen(req)
+              print("Senkronizasyon başarıyla tamamlandı, HTTP Status:", resp.status)
+          except HTTPError as e:
+              print("Google Drive API Yükleme Hatası:", e.code)
+              print("Detay:", e.read().decode("utf-8"))
+              sys.exit(1)
           EOF
