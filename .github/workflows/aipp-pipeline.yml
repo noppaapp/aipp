@@ -2,10 +2,23 @@ name: AIPP Autonomous Pipeline
 
 on:
   workflow_dispatch:
+    inputs:
+      command:
+        description: "AIPP command"
+        required: true
+        default: "BAŞLA"
+      task:
+        description: "Task ID when required"
+        required: false
+        default: ""
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -13,19 +26,38 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
-      - name: Install dependencies
+      - name: Validate canonical workspace
         run: |
-          pip install --upgrade pip
-          pip install google-api-python-client google-auth
+          test -f AIPP.md
+          test -f PROJECT_BOOT.md
 
-      - name: Create service_account.json from Secret
+      - name: Run AIPP
         run: |
-          echo '${{ secrets.GDRIVE_CREDENTIALS }}' > service_account.json
+          if [ -n "${{ inputs.task }}" ]; then
+            python aipp_runner.py "${{ inputs.command }}" \
+              --workspace "." \
+              --task "${{ inputs.task }}"
+          else
+            python aipp_runner.py "${{ inputs.command }}" \
+              --workspace "."
+          fi
 
-      - name: Run AIPP Runner
-        env:
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+      - name: Show canonical state
         run: |
-          python aipp_runner.py BAŞLA --workspace "."
+          cat aipp_state.json
+
+      - name: Commit state artifact
+        run: |
+          git config user.name "AIPP Autonomous Runner"
+          git config user.email "aipp-runner@users.noreply.github.com"
+
+          git add aipp_state.json
+
+          if git diff --cached --quiet; then
+            echo "No state change."
+          else
+            git commit -m "chore(aipp): update canonical state"
+            git push
+          fi
