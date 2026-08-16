@@ -1,67 +1,208 @@
-import os
-import sys
-import json
 import argparse
-import io
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+import json
+import os
+from pathlib import Path
+from datetime import datetime, timezone
 
-# BU SATIRI DEĞİŞTİRDİK (Artık tüm dosyaları görebilir)
-SCOPES = ['https://www.googleapis.com/auth/drive']
 
-def get_drive_service():
-    creds_path = 'service_account.json'
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(f"Kimlik dosyası bulunamadı: {creds_path}")
-    creds = service_account.Credentials.from_service_account_file(creds_path, scopes=SCOPES)
-    return build('drive', 'v3', credentials=creds)
+STATE_FILE = "aipp_state.json"
+PROJECT_BOOT = "PROJECT_BOOT.md"
+AIPP_SPEC = "AIPP.md"
 
-def upload_or_update_file(service, folder_id, filename, content, mimetype):
-    if isinstance(content, str):
-        media_content = io.BytesIO(content.encode('utf-8'))
-    else:
-        media_content = io.BytesIO(content)
 
-    media = MediaIoBaseUpload(media_content, mimetype=mimetype, resumable=True)
-    
-    # Artık 'drive' yetkisiyle dosyayı bulabileceğiz
-    query = f"name = '{filename}' and '{folder_id}' in parents and trashed = false"
-    results = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-    files = results.get('files', [])
+def utc_now():
+    return datetime.now(timezone.utc).isoformat()
 
-    if files:
-        file_id = files[0]['id']
-        file = service.files().update(
-            fileId=file_id,
-            media_body=media
-        ).execute()
-        print(f"Mevcut dosya başarıyla güncellendi! Drive Dosya ID: {file.get('id')}")
-    else:
-        # Eğer hala bulamıyorsa (dosya yoksa), hata ver ki kota hatasıyla uğraşmayalım
-        raise FileNotFoundError(f"'{filename}' bulunamadı. Lütfen klasör içinde olduğundan emin ol.")
+
+def load_json(path):
+    if not Path(path).exists():
+        raise FileNotFoundError(f"Canonical file not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_json(path, data):
+    tmp = f"{path}.tmp"
+
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+    os.replace(tmp, path)
+
+
+def validate_workspace():
+    required = [AIPP_SPEC, PROJECT_BOOT]
+
+    missing = [x for x in required if not Path(x).exists()]
+
+    if missing:
+        raise RuntimeError(
+            "HALT: Missing canonical workspace files: "
+            + ", ".join(missing)
+        )
+
+
+def load_state():
+    if not Path(STATE_FILE).exists():
+        return {
+            "version": "1.1.1",
+            "status": "INITIALIZED",
+            "active_project": None,
+            "execution_mode": "REAL",
+            "task_lifecycle": {
+                "NOW": None,
+                "DEFERRED": [],
+                "BLOCKED": [],
+                "FUTURE": [],
+                "REFERENCE": [],
+                "COMPLETED": []
+            },
+            "authority_gate": {
+                "pending_approval": None,
+                "last_action": "INITIALIZATION"
+            },
+            "step": 0,
+            "runner_engine": "GitHub Actions Autonomous Cloud Runner"
+        }
+
+    return load_json(STATE_FILE)
+
+
+def initialize_state(state):
+    state["status"] = "PROPOSAL_READY"
+    state["step"] = 1
+    state["authority_gate"]["last_action"] = "INITIALIZATION"
+
+    return state
+
+
+def find_future_task(state, task_id):
+    for task in state["task_lifecycle"]["FUTURE"]:
+        if task.get("id") == task_id:
+            return task
+
+    return None
+
+
+def request_approval(state, task_id):
+    task = find_future_task(state, task_id)
+
+    if task is None:
+        raise RuntimeError(
+            f"HALT: FUTURE task not found: {task_id}"
+        )
+
+    state["authority_gate"]["pending_approval"] = task_id
+    state["authority_gate"]["last_action"] = "APPROVAL_REQUESTED"
+    state["status"] = "AWAITING_AUTHORITY"
+
+    return state
+
+
+def approve_task(state, task_id):
+    pending = state["authority_gate"].get("pending_approval")
+
+    if pending != task_id:
+        raise RuntimeError(
+            "HALT: Authority Gate mismatch. "
+            f"pending={pending}, requested={task_id}"
+        )
+
+    task = find_future_task(state, task_id)
+
+    if task is None:
+        raise RuntimeError(
+            f"HALT: Task disappeared from FUTURE: {task_id}"
+        )
+
+    state["task_lifecycle"]["FUTURE"].remove(task)
+
+    task["status"] = "APPROVED"
+
+    state["authority_gate"]["pending_approval"] = None
+    state["authority_gate"]["last_action"] = "APPROVED"
+
+    state["task_lifecycle"]["NOW"] = task
+    state["status"] = "NOW"
+    state["step"] = 2
+
+    return state
+
 
 def main():
-    parser = argparse.ArgumentParser(description="AIPP Runner")
-    parser.add_argument("command", nargs="?", default="BAŞLA")
-    parser.add_argument("--workspace", default=".")
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="BAŞLA"
+    )
+
+    parser.add_argument(
+        "--workspace",
+        default="."
+    )
+
+    parser.add_argument(
+        "--task"
+    )
+
     args = parser.parse_args()
 
-    # Ortam değişkeninden klasör ID'sini al
-    folder_id = os.environ.get("GDRIVE_FOLDER_ID")
-    if not folder_id:
-        raise ValueError("GDRIVE_FOLDER_ID bulunamadı!")
+    os.chdir(args.workspace)
 
-    service = get_drive_service()
+    validate_workspace()
 
-    state_data = {
-        "status": "RUNNING",
-        "command": args.command,
-        "workspace": args.workspace
-    }
-    state_json = json.dumps(state_data, indent=2)
+    state = load_state()
 
-    upload_or_update_file(service, folder_id, "aipp_state.json", state_json, "application/json")
+    command = args.command.upper()
+
+    if command == "BAŞLA":
+        state = initialize_state(state)
+
+    elif command == "REQUEST_APPROVAL":
+        if not args.task:
+            raise RuntimeError(
+                "HALT: --task is required."
+            )
+
+        state = request_approval(
+            state,
+            args.task
+        )
+
+    elif command == "APPROVE":
+        if not args.task:
+            raise RuntimeError(
+                "HALT: --task is required."
+            )
+
+        state = approve_task(
+            state,
+            args.task
+        )
+
+    else:
+        raise RuntimeError(
+            f"HALT: Unknown command: {args.command}"
+        )
+
+    state["last_updated"] = utc_now()
+
+    save_json(
+        STATE_FILE,
+        state
+    )
+
+    print(
+        json.dumps(
+            state,
+            indent=2,
+            ensure_ascii=False
+        )
+    )
+
 
 if __name__ == "__main__":
     main()
