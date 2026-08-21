@@ -14,14 +14,6 @@ def utc_now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def load_json(path):
-    if not Path(path).exists():
-        raise FileNotFoundError(f"Canonical file not found: {path}")
-
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
 def save_json(path, data):
     tmp = f"{path}.tmp"
 
@@ -33,47 +25,59 @@ def save_json(path, data):
 
 def validate_workspace():
     required = [AIPP_SPEC, PROJECT_BOOT]
-
     missing = [x for x in required if not Path(x).exists()]
 
     if missing:
         raise RuntimeError(
-            "HALT: Missing canonical workspace files: "
-            + ", ".join(missing)
+            "HALT: Missing canonical workspace files: " + ", ".join(missing)
         )
+
+
+def default_state():
+    return {
+        "version": "1.1.1",
+        "status": "INITIALIZED",
+        "active_project": None,
+        "execution_mode": "REAL",
+        "task_lifecycle": {
+            "NOW": None,
+            "DEFERRED": [],
+            "BLOCKED": [],
+            "FUTURE": [],
+            "REFERENCE": [],
+            "COMPLETED": []
+        },
+        "authority_gate": {
+            "pending_approval": None,
+            "last_action": "INITIALIZATION"
+        },
+        "step": 0,
+        "runner_engine": "GitHub Actions Autonomous Cloud Runner"
+    }
 
 
 def load_state():
     if not Path(STATE_FILE).exists():
-        return {
-            "version": "1.1.1",
-            "status": "INITIALIZED",
-            "active_project": None,
-            "execution_mode": "REAL",
-            "task_lifecycle": {
-                "NOW": None,
-                "DEFERRED": [],
-                "BLOCKED": [],
-                "FUTURE": [],
-                "REFERENCE": [],
-                "COMPLETED": []
-            },
-            "authority_gate": {
-                "pending_approval": None,
-                "last_action": "INITIALIZATION"
-            },
-            "step": 0,
-            "runner_engine": "GitHub Actions Autonomous Cloud Runner"
-        }
+        return default_state()
 
-    return load_json(STATE_FILE)
+    with open(STATE_FILE, "r", encoding="utf-8") as f:
+        state = json.load(f)
+
+    defaults = default_state()
+    state.setdefault("version", defaults["version"])
+    state.setdefault("active_project", defaults["active_project"])
+    state.setdefault("execution_mode", defaults["execution_mode"])
+    state.setdefault("task_lifecycle", defaults["task_lifecycle"])
+    state.setdefault("authority_gate", defaults["authority_gate"])
+    state.setdefault("step", defaults["step"])
+    state.setdefault("runner_engine", defaults["runner_engine"])
+    return state
 
 
 def initialize_state(state):
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
     state["authority_gate"]["last_action"] = "INITIALIZATION"
-
     return state
 
 
@@ -81,28 +85,22 @@ def find_future_task(state, task_id):
     for task in state["task_lifecycle"]["FUTURE"]:
         if task.get("id") == task_id:
             return task
-
     return None
 
 
 def request_approval(state, task_id):
     task = find_future_task(state, task_id)
-
     if task is None:
-        raise RuntimeError(
-            f"HALT: FUTURE task not found: {task_id}"
-        )
+        raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
 
     state["authority_gate"]["pending_approval"] = task_id
     state["authority_gate"]["last_action"] = "APPROVAL_REQUESTED"
     state["status"] = "AWAITING_AUTHORITY"
-
     return state
 
 
 def approve_task(state, task_id):
     pending = state["authority_gate"].get("pending_approval")
-
     if pending != task_id:
         raise RuntimeError(
             "HALT: Authority Gate mismatch. "
@@ -110,98 +108,47 @@ def approve_task(state, task_id):
         )
 
     task = find_future_task(state, task_id)
-
     if task is None:
-        raise RuntimeError(
-            f"HALT: Task disappeared from FUTURE: {task_id}"
-        )
+        raise RuntimeError(f"HALT: Task disappeared from FUTURE: {task_id}")
 
     state["task_lifecycle"]["FUTURE"].remove(task)
-
     task["status"] = "APPROVED"
-
     state["authority_gate"]["pending_approval"] = None
     state["authority_gate"]["last_action"] = "APPROVED"
-
     state["task_lifecycle"]["NOW"] = task
     state["status"] = "NOW"
     state["step"] = 2
-
     return state
 
 
 def main():
     parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "command",
-        nargs="?",
-        default="BAŞLA"
-    )
-
-    parser.add_argument(
-        "--workspace",
-        default="."
-    )
-
-    parser.add_argument(
-        "--task"
-    )
-
+    parser.add_argument("command", nargs="?", default="BAŞLA")
+    parser.add_argument("--workspace", default=".")
+    parser.add_argument("--task")
     args = parser.parse_args()
 
     os.chdir(args.workspace)
-
     validate_workspace()
-
     state = load_state()
-
     command = args.command.upper()
 
     if command == "BAŞLA":
         state = initialize_state(state)
-
     elif command == "REQUEST_APPROVAL":
         if not args.task:
-            raise RuntimeError(
-                "HALT: --task is required."
-            )
-
-        state = request_approval(
-            state,
-            args.task
-        )
-
+            raise RuntimeError("HALT: --task is required.")
+        state = request_approval(state, args.task)
     elif command == "APPROVE":
         if not args.task:
-            raise RuntimeError(
-                "HALT: --task is required."
-            )
-
-        state = approve_task(
-            state,
-            args.task
-        )
-
+            raise RuntimeError("HALT: --task is required.")
+        state = approve_task(state, args.task)
     else:
-        raise RuntimeError(
-            f"HALT: Unknown command: {args.command}"
-        )
+        raise RuntimeError(f"HALT: Unknown command: {args.command}")
 
     state["last_updated"] = utc_now()
-
-    save_json(
-        STATE_FILE,
-        state
-    )
-
-    print(
-        json.dumps(
-            state,
-            indent=2,
-            ensure_ascii=False
-        )
-    )
+    save_json(STATE_FILE, state)
+    print(json.dumps(state, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
