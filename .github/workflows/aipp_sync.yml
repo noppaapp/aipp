@@ -2,7 +2,9 @@ name: AIPP State Sync to Google Drive
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - test/aipp-visible-write-20260821
   workflow_dispatch:
 
 jobs:
@@ -15,7 +17,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
+
+      - name: Prove checked-out revision
+        run: |
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          git rev-parse HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 
       - name: Sync aipp_state.json with Google Drive
         env:
@@ -39,11 +48,10 @@ jobs:
               creds_json = json.loads(raw_creds)
               client_id = creds_json.get("client_id") or creds_json.get("installed", {}).get("client_id") or creds_json.get("web", {}).get("client_id")
               client_secret = creds_json.get("client_secret") or creds_json.get("installed", {}).get("client_secret") or creds_json.get("web", {}).get("client_secret")
-          except:
+          except json.JSONDecodeError:
               parts = raw_creds.replace(";", " ").split()
               if len(parts) >= 2:
-                  client_id = parts[0]
-                  client_secret = parts[1]
+                  client_id, client_secret = parts[0], parts[1]
               else:
                   print("HATA: GDRIVE_CREDENTIALS formatı anlaşılamadı.")
                   sys.exit(1)
@@ -52,7 +60,6 @@ jobs:
               print("HATA: client_id veya client_secret ayrıştırılamadı. GDRIVE_CREDENTIALS içeriğini kontrol et.")
               sys.exit(1)
 
-          # 1. Refresh Token ile Access Token Al
           data = urllib.parse.urlencode({
               "client_id": client_id,
               "client_secret": client_secret,
@@ -62,7 +69,7 @@ jobs:
 
           req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
           req.add_header("Content-Type", "application/x-www-form-urlencoded")
-          
+
           try:
               res = urllib.request.urlopen(req)
               access_token = json.loads(res.read().decode("utf-8"))["access_token"]
@@ -72,11 +79,10 @@ jobs:
               print("Detay:", e.read().decode("utf-8"))
               sys.exit(1)
 
-          # 2. Drive'da aipp_state.json dosyasını ara
           file_name = "aipp_state.json"
           query = f"name = '{file_name}' and '{folder_id}' in parents and trashed = false"
           search_url = f"https://www.googleapis.com/drive/v3/files?{urllib.parse.urlencode({'q': query})}"
-          
+
           req = urllib.request.Request(search_url, headers={"Authorization": f"Bearer {access_token}"})
           try:
               response = urllib.request.urlopen(req)
@@ -88,13 +94,12 @@ jobs:
 
           local_file_path = "aipp_state.json"
           if not os.path.exists(local_file_path):
-              with open(local_file_path, "w") as f:
-                  json.dump({"state": "initialized"}, f)
+              print("HATA: aipp_state.json checkout içinde bulunamadı.")
+              sys.exit(1)
 
           with open(local_file_path, "rb") as f:
               file_content = f.read()
 
-          # Hatanın Çözüldüğü Kısım: Güncelleme ise folder_id gönderilmez!
           if files:
               file_id = files[0]["id"]
               print(f"Mevcut dosya güncelleniyor (ID: {file_id})...")
@@ -125,7 +130,7 @@ jobs:
               },
               method=method
           )
-          
+
           try:
               resp = urllib.request.urlopen(req)
               print("Senkronizasyon başarıyla tamamlandı, HTTP Status:", resp.status)
