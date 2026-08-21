@@ -47,6 +47,7 @@ jobs:
           test -f AIPP.md
           test -f PROJECT_BOOT.md
           test -f aipp_drive_sync.py
+          test -f aipp_drive_read_test.py
 
       - name: Run AIPP
         env:
@@ -68,6 +69,13 @@ jobs:
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: python aipp_drive_sync.py
+
+      - name: Read workspace from Google Drive
+        env:
+          GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: python aipp_drive_read_test.py
 
       - name: Commit state artifact
         run: |
