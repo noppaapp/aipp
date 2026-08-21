@@ -1,6 +1,9 @@
 name: AIPP Autonomous Pipeline
 
 on:
+  push:
+    branches:
+      - test/aipp-visible-write-20260821
   workflow_dispatch:
     inputs:
       command:
@@ -26,7 +29,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
+
+      - name: Show checked-out revision
+        run: |
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          git log -1 --oneline
+          test -f aipp_runner.py
+          grep -q 'def initialize_state' aipp_runner.py
 
       - name: Validate canonical workspace
         run: |
@@ -34,14 +44,14 @@ jobs:
           test -f PROJECT_BOOT.md
 
       - name: Run AIPP
+        env:
+          AIPP_COMMAND: ${{ inputs.command || 'BAŞLA' }}
+          AIPP_TASK: ${{ inputs.task || '' }}
         run: |
-          if [ -n "${{ inputs.task }}" ]; then
-            python aipp_runner.py "${{ inputs.command }}" \
-              --workspace "." \
-              --task "${{ inputs.task }}"
+          if [ -n "$AIPP_TASK" ]; then
+            python aipp_runner.py "$AIPP_COMMAND" --workspace "." --task "$AIPP_TASK"
           else
-            python aipp_runner.py "${{ inputs.command }}" \
-              --workspace "."
+            python aipp_runner.py "$AIPP_COMMAND" --workspace "."
           fi
 
       - name: Show canonical state
@@ -52,9 +62,7 @@ jobs:
         run: |
           git config user.name "AIPP Autonomous Runner"
           git config user.email "aipp-runner@users.noreply.github.com"
-
           git add aipp_state.json
-
           if git diff --cached --quiet; then
             echo "No state change."
           else
