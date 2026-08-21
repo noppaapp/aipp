@@ -58,7 +58,6 @@ def load_state():
     with open(STATE_FILE, "r", encoding="utf-8") as f:
         state = json.load(f)
 
-    # Backward-compatible schema repair for older canonical state files.
     for key in ("version", "active_project", "execution_mode", "step", "runner_engine"):
         if key not in state or state[key] is None:
             state[key] = defaults[key]
@@ -83,9 +82,14 @@ def load_state():
 
 
 def initialize_state(state):
+    gate = state.get("authority_gate")
+    if not isinstance(gate, dict):
+        gate = {}
+    gate.setdefault("pending_approval", None)
+    gate["last_action"] = "INITIALIZATION"
+    state["authority_gate"] = gate
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
-    state["authority_gate"]["last_action"] = "INITIALIZATION"
     return state
 
 
