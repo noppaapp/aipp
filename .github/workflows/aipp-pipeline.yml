@@ -20,10 +20,8 @@ on:
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,12 +31,16 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Show checked-out revision
+      - name: PROVE CHECKED OUT SOURCE
         run: |
+          echo "GITHUB_REF=$GITHUB_REF"
           echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "HEAD=$(git rev-parse HEAD)"
           git log -1 --oneline
-          test -f aipp_runner.py
-          grep -q 'def initialize_state' aipp_runner.py
+          echo "--- initialize_state ---"
+          grep -A 12 -B 3 'def initialize_state' aipp_runner.py
+          echo "--- authority_gate references ---"
+          grep -n 'authority_gate' aipp_runner.py
 
       - name: Validate canonical workspace
         run: |
@@ -57,15 +59,7 @@ jobs:
           fi
 
       - name: Show canonical state
-        run: |
-          cat aipp_state.json
-
-      - name: Sync canonical state to Google Drive
-        env:
-          GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
-          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-        run: python drive_sync.py
+        run: cat aipp_state.json
 
       - name: Commit state artifact
         run: |
