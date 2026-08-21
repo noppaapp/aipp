@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - test/aipp-visible-write-20260821
+    paths-ignore:
+      - aipp_state.json
   workflow_dispatch:
     inputs:
       command:
@@ -57,6 +59,13 @@ jobs:
       - name: Show canonical state
         run: |
           cat aipp_state.json
+
+      - name: Sync canonical state to Google Drive
+        env:
+          GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: python drive_sync.py
 
       - name: Commit state artifact
         run: |
