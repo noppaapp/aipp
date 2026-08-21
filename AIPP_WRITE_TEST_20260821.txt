@@ -1,0 +1,4 @@
+AIPP GitHub write test
+Created: 2026-08-21
+Purpose: verify authenticated branch/file write access.
+Safe test artifact. No production code.
