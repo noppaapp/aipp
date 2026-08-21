@@ -93,65 +93,20 @@ def initialize_state(state):
     return state
 
 
-def find_future_task(state, task_id):
-    for task in state["task_lifecycle"]["FUTURE"]:
-        if task.get("id") == task_id:
-            return task
-    return None
-
-
-def request_approval(state, task_id):
-    task = find_future_task(state, task_id)
-    if task is None:
-        raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
-    state["authority_gate"]["pending_approval"] = task_id
-    state["authority_gate"]["last_action"] = "APPROVAL_REQUESTED"
-    state["status"] = "AWAITING_AUTHORITY"
-    return state
-
-
-def approve_task(state, task_id):
-    pending = state["authority_gate"].get("pending_approval")
-    if pending != task_id:
-        raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
-    task = find_future_task(state, task_id)
-    if task is None:
-        raise RuntimeError(f"HALT: Task disappeared from FUTURE: {task_id}")
-    state["task_lifecycle"]["FUTURE"].remove(task)
-    task["status"] = "APPROVED"
-    state["authority_gate"]["pending_approval"] = None
-    state["authority_gate"]["last_action"] = "APPROVED"
-    state["task_lifecycle"]["NOW"] = task
-    state["status"] = "NOW"
-    state["step"] = 2
-    return state
-
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", nargs="?", default="BAŞLA")
+    parser.add_argument("command")
     parser.add_argument("--workspace", default=".")
-    parser.add_argument("--task")
+    parser.add_argument("--task", default=None)
     args = parser.parse_args()
+
     os.chdir(args.workspace)
     validate_workspace()
     state = load_state()
-    command = args.command.upper()
-
-    if command == "BAŞLA":
-        state = initialize_state(state)
-    elif command == "REQUEST_APPROVAL":
-        if not args.task:
-            raise RuntimeError("HALT: --task is required.")
-        state = request_approval(state, args.task)
-    elif command == "APPROVE":
-        if not args.task:
-            raise RuntimeError("HALT: --task is required.")
-        state = approve_task(state, args.task)
-    else:
-        raise RuntimeError(f"HALT: Unknown command: {args.command}")
-
+    state = initialize_state(state)
     state["last_updated"] = utc_now()
+    if args.task:
+        state["active_project"] = args.task
     save_json(STATE_FILE, state)
     print(json.dumps(state, indent=2, ensure_ascii=False))
 
