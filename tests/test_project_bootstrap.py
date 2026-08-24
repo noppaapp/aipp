@@ -10,13 +10,16 @@ RUNNER = ROOT / "aipp_runner.py"
 def test_project_bootstrap_maps_canonical_workspace(tmp_path):
     (tmp_path / "AIPP.md").write_text("# AIPP\n", encoding="utf-8")
     (tmp_path / "PROJECT_BOOT.md").write_text(
-        """# PROJECT_BOOT: Demo Project\n\n"
-        "**Workspace Status:** ACTIVE\n"
-        "**Active State:** [READY]\n\n"
-        "| Task ID | Task Description | Status | Dependency / Reason |\n"
-        "| :--- | :--- | :--- | :--- |\n"
-        "| **TASK-01** | `First task` | `COMPLETED` | - |\n"
-        "| **TASK-02** | `Future task` | `FUTURE` | TASK-01 |\n""",
+        """# PROJECT_BOOT: Demo Project
+
+**Workspace Status:** ACTIVE
+**Active State:** [READY]
+
+| Task ID | Task Description | Status | Dependency / Reason |
+| :--- | :--- | :--- | :--- |
+| **TASK-01** | `First task` | `COMPLETED` | - |
+| **TASK-02** | `Future task` | `FUTURE` | TASK-01 |
+""",
         encoding="utf-8"
     )
     state = {
@@ -28,7 +31,20 @@ def test_project_bootstrap_maps_canonical_workspace(tmp_path):
     }
     (tmp_path / "aipp_state.json").write_text(json.dumps(state), encoding="utf-8")
 
-    result = subprocess.run([sys.executable, str(RUNNER), "BAŞLA", "--workspace", str(tmp_path)], cwd=tmp_path, text=True, capture_output=True, check=True)
+    result = subprocess.run(
+        [sys.executable, str(RUNNER), "BAŞLA", "--workspace", str(tmp_path)],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "aipp_runner.py failed during bootstrap.\n"
+            f"returncode={result.returncode}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
     output = json.loads(result.stdout)
 
     assert output["active_project"] == "Demo Project"
