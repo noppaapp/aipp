@@ -229,6 +229,62 @@ def discover_task_candidates(token, folder_id):
     return candidates
 
 
+def reconcile_discovered_tasks(state, candidates):
+    """Map discovered task evidence into FUTURE without crossing the Authority Gate.
+
+    Discovery is allowed to propose work, but it must never move a discovered task to NOW.
+    Existing NOW/COMPLETED/BLOCKED/DEFERRED/REFERENCE entries remain authoritative.
+    """
+    lifecycle = state.setdefault("task_lifecycle", {})
+    for key, default in {
+        "NOW": None,
+        "DEFERRED": [],
+        "BLOCKED": [],
+        "FUTURE": [],
+        "REFERENCE": [],
+        "COMPLETED": [],
+    }.items():
+        lifecycle.setdefault(key, default)
+
+    existing_ids = set()
+    for bucket in ("NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"):
+        items = lifecycle.get(bucket)
+        if isinstance(items, dict):
+            items = [items]
+        for item in items or []:
+            if isinstance(item, dict) and item.get("id"):
+                existing_ids.add(item["id"])
+
+    added = []
+    for candidate in candidates:
+        for task_id in candidate.get("task_ids", []):
+            if task_id in existing_ids:
+                continue
+            proposal = {
+                "id": task_id,
+                "title": f"Discovered task {task_id}",
+                "status": "PROPOSED",
+                "source": {
+                    "type": "WORKSPACE_DISCOVERY",
+                    "file_id": candidate.get("id"),
+                    "file_name": candidate.get("name"),
+                    "mimeType": candidate.get("mimeType"),
+                },
+                "proposal_reason": "Task identifier discovered during canonical Workspace scan",
+            }
+            lifecycle["FUTURE"].append(proposal)
+            existing_ids.add(task_id)
+            added.append(task_id)
+
+    if added:
+        state["status"] = "PROPOSAL_READY"
+        state.setdefault("authority_gate", {})["last_action"] = "WORKSPACE_DISCOVERY_PROPOSALS"
+        print(f"WORKSPACE_TASK_RECONCILIATION discovered={len(added)} added_to=FUTURE ids={','.join(added)}")
+    else:
+        print("WORKSPACE_TASK_RECONCILIATION discovered=0 added_to=FUTURE ids=none")
+    return state
+
+
 def read_drive_state(token, file_info):
     file_id = file_info["id"]
     if file_info.get("mimeType") == GOOGLE_DOC_MIME:
@@ -283,6 +339,7 @@ def main():
         raise RuntimeError("HALT: aipp_state.json not found in configured Drive folder")
     state = normalize_state(read_drive_state(token, file_info))
     candidates = discover_task_candidates(token, folder_id)
+    state = reconcile_discovered_tasks(state, candidates)
     if state["task_lifecycle"].get("NOW") is None and not state["task_lifecycle"].get("FUTURE") and candidates:
         state["discovered_task_candidates"] = candidates
     Path(STATE_FILE).write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
