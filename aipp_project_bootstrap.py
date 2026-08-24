@@ -5,6 +5,13 @@ from pathlib import Path
 LIFECYCLE_STATUSES = {"NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"}
 
 
+def _clean_cell(value):
+    value = value.strip()
+    value = re.sub(r"^\*\*|\*\*$", "", value).strip()
+    value = re.sub(r"^`|`$", "", value).strip()
+    return value
+
+
 def parse_project_boot(path):
     text = Path(path).read_text(encoding="utf-8")
     project = None
@@ -20,17 +27,22 @@ def parse_project_boot(path):
         elif "**Active State:**" in line:
             active_state = line.split("**Active State:**", 1)[1].strip()
 
-        match = re.match(
-            r"\|\s*\*\*(TASK-[^*]+)\*\*\s*\|\s*`?([^|]+?)`?\s*\|\s*`?(COMPLETED|NOW|DEFERRED|BLOCKED|FUTURE|REFERENCE)`?\s*\|\s*([^|]+?)\s*\|",
-            line,
-        )
-        if match:
-            tasks.append({
-                "id": match.group(1).strip(),
-                "title": match.group(2).strip(),
-                "status": match.group(3).strip(),
-                "dependency_reason": match.group(4).strip(),
-            })
+        # Parse canonical Markdown task rows by cells rather than relying on
+        # formatting details such as backticks around individual cells.
+        if line.lstrip().startswith("|"):
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) >= 4:
+                task_id = _clean_cell(cells[0])
+                title = _clean_cell(cells[1])
+                task_status = _clean_cell(cells[2]).upper()
+                dependency = _clean_cell(cells[3])
+                if task_id.startswith("TASK-") and task_status in LIFECYCLE_STATUSES:
+                    tasks.append({
+                        "id": task_id,
+                        "title": title,
+                        "status": task_status,
+                        "dependency_reason": dependency,
+                    })
 
     return {
         "project": project,
@@ -74,8 +86,6 @@ def bootstrap_project(workspace, state):
         if task_id in existing[status]:
             continue
 
-        # If the same task exists in another lifecycle bucket, remove the stale
-        # copy before applying the canonical status from PROJECT_BOOT.
         for other_status in LIFECYCLE_STATUSES - {status, "NOW"}:
             lifecycle[other_status] = [
                 item for item in lifecycle.get(other_status, [])
