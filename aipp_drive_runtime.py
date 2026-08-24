@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 DRIVE_API = "https://www.googleapis.com/drive/v3"
 STATE_FILE = "aipp_state.json"
@@ -15,16 +16,18 @@ def _request(url, method="GET", data=None, token=None, content_type=None):
     if content_type:
         headers["Content-Type"] = content_type
     req = Request(url, data=data, headers=headers, method=method)
-    with urlopen(req) as response:
-        return response.read()
+    try:
+        with urlopen(req) as response:
+            return response.read()
+    except HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Drive API HTTP {e.code}: {detail}") from e
 
 
 def get_credentials():
-    """Read existing Client ID + Client Secret; JSON is optional."""
     raw = os.environ.get("GDRIVE_CREDENTIALS", "").strip()
     if not raw:
         raise RuntimeError("HALT: GDRIVE_CREDENTIALS is empty")
-
     try:
         data = json.loads(raw)
         if isinstance(data, dict):
@@ -34,7 +37,6 @@ def get_credentials():
                 return client_id, client_secret
     except json.JSONDecodeError:
         pass
-
     parts = raw.replace(";", " ").split()
     if len(parts) >= 2:
         return parts[0], parts[1]
@@ -48,19 +50,27 @@ def get_access_token():
         raise RuntimeError("HALT: GCP_REFRESH_TOKEN is empty")
     payload = urlencode({"client_id": client_id, "client_secret": client_secret, "refresh_token": refresh_token, "grant_type": "refresh_token"}).encode()
     raw = _request("https://oauth2.googleapis.com/token", method="POST", data=payload, content_type="application/x-www-form-urlencoded")
-    return json.loads(raw)["access_token"]
+    result = json.loads(raw)
+    if "access_token" not in result:
+        raise RuntimeError(f"HALT: OAuth response missing access_token: {result}")
+    return result["access_token"]
 
 
 def find_state_file(token, folder_id):
     query = f"name='{STATE_FILE}' and '{folder_id}' in parents and trashed=false"
-    params = urlencode({"q": query, "fields": "files(id,name,mimeType)"})
+    params = urlencode({"q": query, "fields": "files(id,name,mimeType,capabilities(canDownload))"})
     result = json.loads(_request(f"{DRIVE_API}/files?{params}", token=token))
     files = result.get("files", [])
     return files[0] if files else None
 
 
-def read_drive_state(token, file_id):
-    return json.loads(_request(f"{DRIVE_API}/files/{file_id}?alt=media", token=token))
+def read_drive_state(token, file_info):
+    file_id = file_info["id"]
+    mime_type = file_info.get("mimeType", "")
+    if mime_type.startswith("application/vnd.google-apps."):
+        raise RuntimeError(f"HALT: aipp_state.json is a Google Workspace file ({mime_type})")
+    params = urlencode({"alt": "media", "supportsAllDrives": "true"})
+    return json.loads(_request(f"{DRIVE_API}/files/{file_id}?{params}", token=token))
 
 
 def main():
@@ -71,7 +81,8 @@ def main():
     file_info = find_state_file(token, folder_id)
     if not file_info:
         raise RuntimeError("HALT: aipp_state.json not found in configured Drive folder")
-    state = read_drive_state(token, file_info["id"])
+    print(f"DRIVE_FILE_FOUND id={file_info['id']} mimeType={file_info.get('mimeType')} canDownload={file_info.get('capabilities', {}).get('canDownload')}")
+    state = read_drive_state(token, file_info)
     if not isinstance(state, dict) or state.get("version") != "1.1.1":
         raise RuntimeError("HALT: Drive state is not a valid AIPP v1.1.1 state")
     Path(STATE_FILE).write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
