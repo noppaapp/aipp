@@ -1,10 +1,17 @@
+import io
 import json
 import os
 import re
+import zipfile
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
 
 DRIVE_API = "https://www.googleapis.com/drive/v3"
 STATE_FILE = "aipp_state.json"
@@ -12,6 +19,8 @@ GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
 GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation"
 FOLDER_MIME = "application/vnd.google-apps.folder"
+PDF_MIME = "application/pdf"
+ZIP_MIME = "application/zip"
 TEXT_MIME_TYPES = {
     "text/plain": "text/plain",
     "text/markdown": "text/plain",
@@ -21,6 +30,7 @@ TEXT_MIME_TYPES = {
     "application/x-yaml": "text/plain",
     "text/yaml": "text/plain",
 }
+ZIP_TEXT_EXTENSIONS = {".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".xml", ".py", ".js", ".ts", ".toml"}
 TASK_ID_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 
 
@@ -115,23 +125,79 @@ def list_workspace_tree(token, root_folder_id):
     return discovered
 
 
+def _download_binary(token, file_id):
+    endpoint = f"{DRIVE_API}/files/{file_id}?{urlencode({'alt': 'media', 'supportsAllDrives': 'true'})}"
+    return _request(endpoint, token=token)
+
+
+def _read_pdf(raw):
+    if PdfReader is None:
+        return None
+    try:
+        reader = PdfReader(io.BytesIO(raw))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    except Exception:
+        return None
+
+
+def _read_zip(raw):
+    try:
+        chunks = []
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            for info in archive.infolist():
+                if info.is_dir() or Path(info.filename).suffix.lower() not in ZIP_TEXT_EXTENSIONS:
+                    continue
+                if info.file_size > 2_000_000:
+                    continue
+                try:
+                    text = archive.read(info).decode("utf-8-sig", errors="replace")
+                except Exception:
+                    continue
+                chunks.append(f"\n--- {info.filename} ---\n{text}")
+        return "".join(chunks) if chunks else None
+    except (zipfile.BadZipFile, OSError):
+        return None
+
+
 def read_file_text(token, file_info):
     file_id = file_info["id"]
     mime = file_info.get("mimeType")
+    if mime == FOLDER_MIME:
+        return None
     if mime == GOOGLE_DOC_MIME:
         endpoint = f"{DRIVE_API}/files/{file_id}/export?{urlencode({'mimeType': 'text/plain', 'supportsAllDrives': 'true'})}"
-    elif mime == GOOGLE_SHEET_MIME:
+        try:
+            return _request(endpoint, token=token).decode("utf-8-sig", errors="replace")
+        except HTTPError:
+            return None
+    if mime == GOOGLE_SHEET_MIME:
         endpoint = f"{DRIVE_API}/files/{file_id}/export?{urlencode({'mimeType': 'text/csv', 'supportsAllDrives': 'true'})}"
-    elif mime == GOOGLE_SLIDES_MIME:
+        try:
+            return _request(endpoint, token=token).decode("utf-8-sig", errors="replace")
+        except HTTPError:
+            return None
+    if mime == GOOGLE_SLIDES_MIME:
         endpoint = f"{DRIVE_API}/files/{file_id}/export?{urlencode({'mimeType': 'text/plain', 'supportsAllDrives': 'true'})}"
-    elif mime in TEXT_MIME_TYPES:
-        endpoint = f"{DRIVE_API}/files/{file_id}?{urlencode({'alt': 'media', 'supportsAllDrives': 'true'})}"
-    else:
-        return None
-    try:
-        return _request(endpoint, token=token).decode("utf-8-sig", errors="replace")
-    except HTTPError:
-        return None
+        try:
+            return _request(endpoint, token=token).decode("utf-8-sig", errors="replace")
+        except HTTPError:
+            return None
+    if mime in TEXT_MIME_TYPES:
+        try:
+            return _download_binary(token, file_id).decode("utf-8-sig", errors="replace")
+        except (HTTPError, UnicodeDecodeError):
+            return None
+    if mime == PDF_MIME:
+        try:
+            return _read_pdf(_download_binary(token, file_id))
+        except HTTPError:
+            return None
+    if mime == ZIP_MIME:
+        try:
+            return _read_zip(_download_binary(token, file_id))
+        except HTTPError:
+            return None
+    return None
 
 
 def discover_task_candidates(token, folder_id):
@@ -140,9 +206,13 @@ def discover_task_candidates(token, folder_id):
     readable = 0
     unreadable = 0
     mime_counts = {}
+    scanned_files = 0
     for file_info in files:
         mime = file_info.get("mimeType", "")
         mime_counts[mime] = mime_counts.get(mime, 0) + 1
+        if mime == FOLDER_MIME:
+            continue
+        scanned_files += 1
         text = read_file_text(token, file_info)
         if text is not None:
             readable += 1
@@ -155,7 +225,7 @@ def discover_task_candidates(token, folder_id):
             candidates.append(candidate)
             print(f"DRIVE_TASK_CANDIDATE name={file_info.get('name')} task_ids={','.join(ids)} mimeType={mime}")
     mime_summary = ",".join(f"{key}:{value}" for key, value in sorted(mime_counts.items()))
-    print(f"DRIVE_DISCOVERY files={len(files)} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} mime_types={mime_summary}")
+    print(f"DRIVE_DISCOVERY files={scanned_files} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} mime_types={mime_summary}")
     return candidates
 
 
