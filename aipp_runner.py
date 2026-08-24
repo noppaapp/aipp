@@ -4,6 +4,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aipp_project_bootstrap import bootstrap_project
+
 STATE_FILE = "aipp_state.json"
 PROJECT_BOOT = "PROJECT_BOOT.md"
 AIPP_SPEC = "AIPP.md"
@@ -67,8 +69,10 @@ def load_state():
     return load_json(STATE_FILE)
 
 
-def initialize_state(state):
-    state["status"] = "PROPOSAL_READY"
+def initialize_state(state, workspace):
+    state = bootstrap_project(workspace, state)
+    if state["status"] == "PROJECT_READY":
+        state["status"] = "PROPOSAL_READY"
     state["step"] = 1
     state["authority_gate"]["last_action"] = "INITIALIZATION"
     return state
@@ -169,7 +173,7 @@ def main():
     command = args.command.upper()
 
     if command == "BAŞLA":
-        state = initialize_state(state)
+        state = initialize_state(state, ".")
     elif command == "REQUEST_APPROVAL":
         if not args.task:
             raise RuntimeError("HALT: --task is required.")
