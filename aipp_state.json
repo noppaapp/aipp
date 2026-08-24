@@ -42,10 +42,26 @@
     "pending_approval": null,
     "last_action": "INITIALIZATION"
   },
-  "last_updated": "2026-08-24T19:59:51.967603+00:00",
+  "last_updated": "2026-08-24T20:21:52.833050+00:00",
   "project_bootstrap": {
     "workspace_status": "ACTIVE (GitHub Codespaces)",
     "active_state": "[STAGE_FINAL: DECOUPLED_GENERIC_PROTOCOL]",
     "source": "PROJECT_BOOT.md"
-  }
+  },
+  "discovered_task_candidates": [
+    {
+      "id": "1eF3APYiopfbDbQjpzpUitBmAM0hZwXchewvIqICO9xs",
+      "name": "aipp_state.json",
+      "mimeType": "application/vnd.google-apps.document",
+      "task_ids": [
+        "TASK-01",
+        "TASK-02",
+        "TASK-03",
+        "TASK-04"
+      ],
+      "parents": [
+        "1e4coeyYjQVOS-bP5I5HgxLfCWIrM0QRq"
+      ]
+    }
+  ]
 }
