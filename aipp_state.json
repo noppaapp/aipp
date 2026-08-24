@@ -1,5 +1,21 @@
 {
   "status": "PROPOSAL_READY",
-  "step": 4,
-  "runner_engine": "GitHub Actions Autonomous Cloud Runner"
+  "step": 1,
+  "runner_engine": "GitHub Actions Autonomous Cloud Runner",
+  "version": "1.1.1",
+  "active_project": null,
+  "execution_mode": "REAL",
+  "task_lifecycle": {
+    "NOW": null,
+    "DEFERRED": [],
+    "BLOCKED": [],
+    "FUTURE": [],
+    "REFERENCE": [],
+    "COMPLETED": []
+  },
+  "authority_gate": {
+    "pending_approval": null,
+    "last_action": "INITIALIZATION"
+  },
+  "last_updated": "2026-08-24T17:41:39.441381+00:00"
 }
