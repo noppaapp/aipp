@@ -54,12 +54,12 @@ def get_access_token():
 
 def find_state_file(token, folder_id):
     query = f"name='{STATE_FILE}' and '{folder_id}' in parents and trashed=false"
-    params = urlencode({"q": query, "fields": "files(id,name,mimeType,size,capabilities(canDownload),driveId)", "supportsAllDrives": "true", "includeItemsFromAllDrives": "true"})
+    params = urlencode({"q": query, "fields": "files(id,name,mimeType,size,capabilities(canDownload),driveId,webContentLink)", "supportsAllDrives": "true", "includeItemsFromAllDrives": "true"})
     result = json.loads(_request(f"{DRIVE_API}/files?{params}", token=token))
     files = result.get("files", [])
     if files:
         f = files[0]
-        print(f"DRIVE_FILE_FOUND id={f.get('id')} mimeType={f.get('mimeType')} size={f.get('size')} canDownload={f.get('capabilities', {}).get('canDownload')} driveId={f.get('driveId')}")
+        print(f"DRIVE_FILE_FOUND id={f.get('id')} mimeType={f.get('mimeType')} size={f.get('size')} canDownload={f.get('capabilities', {}).get('canDownload')} driveId={f.get('driveId')} webContentLink={bool(f.get('webContentLink'))}")
         return f
     return None
 
