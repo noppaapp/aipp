@@ -33,7 +33,7 @@ jobs:
         run: |
           echo "CHECKED_OUT_COMMIT=$(git rev-parse HEAD)"
           echo "RUNTIME_SHA=$(git hash-object aipp_drive_runtime.py)"
-          grep -n "DRIVE download\|DRIVE_FILE_FOUND\|PDF_MIME\|ZIP_MIME" aipp_drive_runtime.py
+          grep -n "DRIVE download\\|DRIVE_FILE_FOUND\\|PDF_MIME\\|ZIP_MIME" aipp_drive_runtime.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -88,5 +88,12 @@ jobs:
             echo "No state change."
           else
             git commit -m "chore(aipp): update execution state"
-            git push
+            git fetch origin main
+            if ! git rebase origin/main; then
+              echo "Rebase conflict detected; preserving this run's generated state artifact."
+              git checkout --theirs -- aipp_state.json
+              git add aipp_state.json
+              git rebase --continue
+            fi
+            git push origin HEAD:main
           fi
