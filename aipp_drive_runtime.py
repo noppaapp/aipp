@@ -86,6 +86,44 @@ def read_drive_state(token, file_info):
         raise RuntimeError("HALT: Drive state content is not valid UTF-8 JSON text") from e
 
 
+def normalize_state(state):
+    if not isinstance(state, dict):
+        raise RuntimeError("HALT: Drive state must be a JSON object")
+
+    # Migrate the legacy compact state currently stored in Drive into the
+    # schema required by aipp_runner.py. Preserve existing meaningful fields.
+    defaults = {
+        "version": "1.1.1",
+        "status": "INITIALIZED",
+        "active_project": None,
+        "execution_mode": "REAL",
+        "task_lifecycle": {
+            "NOW": None,
+            "DEFERRED": [],
+            "BLOCKED": [],
+            "FUTURE": [],
+            "REFERENCE": [],
+            "COMPLETED": []
+        },
+        "authority_gate": {
+            "pending_approval": None,
+            "last_action": "INITIALIZATION"
+        },
+        "step": 0,
+        "runner_engine": "GitHub Actions Autonomous Cloud Runner"
+    }
+
+    for key, value in defaults.items():
+        if key not in state:
+            state[key] = value
+        elif isinstance(value, dict) and isinstance(state[key], dict):
+            for nested_key, nested_value in value.items():
+                state[key].setdefault(nested_key, nested_value)
+
+    state["version"] = "1.1.1"
+    return state
+
+
 def main():
     token = get_access_token()
     folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
@@ -94,11 +132,9 @@ def main():
     file_info = find_state_file(token, folder_id)
     if not file_info:
         raise RuntimeError("HALT: aipp_state.json not found in configured Drive folder")
-    state = read_drive_state(token, file_info)
-    if not isinstance(state, dict) or state.get("version") != "1.1.1":
-        raise RuntimeError("HALT: Drive state is not a valid AIPP v1.1.1 state")
+    state = normalize_state(read_drive_state(token, file_info))
     Path(STATE_FILE).write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"DRIVE_STATE_LOADED file_id={file_info['id']} version={state.get('version')}")
+    print(f"DRIVE_STATE_LOADED file_id={file_info['id']} version={state.get('version')} status={state.get('status')}")
 
 
 if __name__ == "__main__":
