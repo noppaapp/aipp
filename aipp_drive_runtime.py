@@ -9,7 +9,18 @@ from urllib.error import HTTPError
 DRIVE_API = "https://www.googleapis.com/drive/v3"
 STATE_FILE = "aipp_state.json"
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
+GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet"
+GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation"
 FOLDER_MIME = "application/vnd.google-apps.folder"
+TEXT_MIME_TYPES = {
+    "text/plain": "text/plain",
+    "text/markdown": "text/plain",
+    "text/csv": "text/plain",
+    "application/json": "text/plain",
+    "application/xml": "text/plain",
+    "application/x-yaml": "text/plain",
+    "text/yaml": "text/plain",
+}
 TASK_ID_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 
 
@@ -109,7 +120,11 @@ def read_file_text(token, file_info):
     mime = file_info.get("mimeType")
     if mime == GOOGLE_DOC_MIME:
         endpoint = f"{DRIVE_API}/files/{file_id}/export?{urlencode({'mimeType': 'text/plain', 'supportsAllDrives': 'true'})}"
-    elif mime == "text/plain":
+    elif mime == GOOGLE_SHEET_MIME:
+        endpoint = f"{DRIVE_API}/files/{file_id}/export?{urlencode({'mimeType': 'text/csv', 'supportsAllDrives': 'true'})}"
+    elif mime == GOOGLE_SLIDES_MIME:
+        endpoint = f"{DRIVE_API}/files/{file_id}/export?{urlencode({'mimeType': 'text/plain', 'supportsAllDrives': 'true'})}"
+    elif mime in TEXT_MIME_TYPES:
         endpoint = f"{DRIVE_API}/files/{file_id}?{urlencode({'alt': 'media', 'supportsAllDrives': 'true'})}"
     else:
         return None
@@ -122,15 +137,25 @@ def read_file_text(token, file_info):
 def discover_task_candidates(token, folder_id):
     files = list_workspace_tree(token, folder_id)
     candidates = []
+    readable = 0
+    unreadable = 0
+    mime_counts = {}
     for file_info in files:
+        mime = file_info.get("mimeType", "")
+        mime_counts[mime] = mime_counts.get(mime, 0) + 1
         text = read_file_text(token, file_info)
+        if text is not None:
+            readable += 1
+        else:
+            unreadable += 1
         haystack = f"{file_info.get('name', '')}\n{text or ''}"
         ids = sorted({match.upper().replace("_", "-").replace(" ", "-") for match in TASK_ID_RE.findall(haystack)})
         if ids:
-            candidate = {"id": file_info["id"], "name": file_info.get("name"), "mimeType": file_info.get("mimeType"), "task_ids": ids, "parents": file_info.get("parents", [])}
+            candidate = {"id": file_info["id"], "name": file_info.get("name"), "mimeType": mime, "task_ids": ids, "parents": file_info.get("parents", [])}
             candidates.append(candidate)
-            print(f"DRIVE_TASK_CANDIDATE name={file_info.get('name')} task_ids={','.join(ids)} mimeType={file_info.get('mimeType')}")
-    print(f"DRIVE_DISCOVERY files={len(files)} task_candidates={len(candidates)}")
+            print(f"DRIVE_TASK_CANDIDATE name={file_info.get('name')} task_ids={','.join(ids)} mimeType={mime}")
+    mime_summary = ",".join(f"{key}:{value}" for key, value in sorted(mime_counts.items()))
+    print(f"DRIVE_DISCOVERY files={len(files)} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} mime_types={mime_summary}")
     return candidates
 
 
