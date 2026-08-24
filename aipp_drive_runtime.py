@@ -7,6 +7,7 @@ from urllib.error import HTTPError
 
 DRIVE_API = "https://www.googleapis.com/drive/v3"
 STATE_FILE = "aipp_state.json"
+GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
 
 
 def _request(url, method="GET", data=None, token=None, content_type=None):
@@ -66,13 +67,23 @@ def find_state_file(token, folder_id):
 
 def read_drive_state(token, file_info):
     file_id = file_info["id"]
-    params = urlencode({"alt": "media", "supportsAllDrives": "true"})
+    if file_info.get("mimeType") == GOOGLE_DOC_MIME:
+        params = urlencode({"mimeType": "text/plain", "supportsAllDrives": "true"})
+        endpoint = f"{DRIVE_API}/files/{file_id}/export?{params}"
+        error_label = "Google Docs export"
+    else:
+        params = urlencode({"alt": "media", "supportsAllDrives": "true"})
+        endpoint = f"{DRIVE_API}/files/{file_id}?{params}"
+        error_label = "Drive download"
     try:
-        raw = _request(f"{DRIVE_API}/files/{file_id}?{params}", token=token)
+        raw = _request(endpoint, token=token)
     except HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HALT: Drive download failed HTTP {e.code}: {detail}") from e
-    return json.loads(raw)
+        raise RuntimeError(f"HALT: {error_label} failed HTTP {e.code}: {detail}") from e
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise RuntimeError("HALT: Drive state content is not valid UTF-8 JSON text") from e
 
 
 def main():
