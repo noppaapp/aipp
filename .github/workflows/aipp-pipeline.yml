@@ -28,8 +28,91 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install test dependency
-        run: python -m pip install pytest
+      - name: Pull canonical state from Google Drive
+        env:
+          GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          python - <<'PY'
+          import json, os, sys, urllib.parse, urllib.request
+          from urllib.error import HTTPError
+
+          refresh_token = os.environ.get("GCP_REFRESH_TOKEN", "").strip()
+          folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+          raw_creds = os.environ.get("GDRIVE_CREDENTIALS", "").strip()
+          if not all([refresh_token, folder_id, raw_creds]):
+              print("HATA: Google Drive Secrets eksik.")
+              sys.exit(1)
+
+          try:
+              creds = json.loads(raw_creds)
+              client_id = creds.get("client_id") or creds.get("installed", {}).get("client_id") or creds.get("web", {}).get("client_id")
+              client_secret = creds.get("client_secret") or creds.get("installed", {}).get("client_secret") or creds.get("web", {}).get("client_secret")
+          except Exception:
+              parts = raw_creds.replace(";", " ").split()
+              client_id, client_secret = (parts[0], parts[1]) if len(parts) >= 2 else (None, None)
+
+          if not client_id or not client_secret:
+              print("HATA: GDRIVE_CREDENTIALS içinden client bilgileri alınamadı.")
+              sys.exit(1)
+
+          token_data = urllib.parse.urlencode({
+              "client_id": client_id,
+              "client_secret": client_secret,
+              "refresh_token": refresh_token,
+              "grant_type": "refresh_token",
+          }).encode()
+          token_req = urllib.request.Request(
+              "https://oauth2.googleapis.com/token",
+              data=token_data,
+              headers={"Content-Type": "application/x-www-form-urlencoded"},
+          )
+          try:
+              token = json.loads(urllib.request.urlopen(token_req).read().decode())["access_token"]
+          except HTTPError as e:
+              print("Google OAuth Hatası:", e.code)
+              print(e.read().decode())
+              sys.exit(1)
+
+          query = "name = 'aipp_state.json' and '{}' in parents and trashed = false".format(folder_id)
+          list_url = "https://www.googleapis.com/drive/v3/files?" + urllib.parse.urlencode({
+              "q": query,
+              "fields": "files(id,name)",
+              "pageSize": 10,
+          })
+          req = urllib.request.Request(list_url, headers={"Authorization": f"Bearer {token}"})
+          try:
+              files = json.loads(urllib.request.urlopen(req).read().decode())["files"]
+          except HTTPError as e:
+              print("Google Drive API Arama Hatası:", e.code)
+              print(e.read().decode())
+              sys.exit(1)
+
+          if not files:
+              print("HATA: GDRIVE_FOLDER_ID içinde aipp_state.json bulunamadı.")
+              sys.exit(1)
+
+          file_id = files[0]["id"]
+          download_url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
+          req = urllib.request.Request(download_url, headers={"Authorization": f"Bearer {token}"})
+          try:
+              state_bytes = urllib.request.urlopen(req).read()
+              state = json.loads(state_bytes.decode("utf-8"))
+          except HTTPError as e:
+              print("Google Drive indirme hatası:", e.code)
+              print(e.read().decode())
+              sys.exit(1)
+
+          if not isinstance(state, dict) or "version" not in state or "task_lifecycle" not in state:
+              print("HATA: Drive'daki aipp_state.json canonical AIPP state formatında değil.")
+              sys.exit(1)
+
+          with open("aipp_state.json", "wb") as f:
+              f.write(state_bytes)
+          print("Drive canonical state başarıyla AIPP runtime'a alındı.")
+          print("Drive file id:", file_id)
+          PY
 
       - name: Validate canonical workspace
         run: |
