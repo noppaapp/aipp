@@ -9,6 +9,7 @@ from urllib.error import HTTPError
 DRIVE_API = "https://www.googleapis.com/drive/v3"
 STATE_FILE = "aipp_state.json"
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
+FOLDER_MIME = "application/vnd.google-apps.folder"
 TASK_ID_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 
 
@@ -67,12 +68,40 @@ def find_state_file(token, folder_id):
     return None
 
 
-def list_workspace_files(token, folder_id):
+def list_workspace_children(token, folder_id):
     query = f"'{folder_id}' in parents and trashed=false"
     fields = "files(id,name,mimeType,size,modifiedTime,parents,capabilities(canDownload)),nextPageToken"
-    params = urlencode({"q": query, "fields": fields, "pageSize": 100, "supportsAllDrives": "true", "includeItemsFromAllDrives": "true", "orderBy": "modifiedTime desc"})
-    result = json.loads(_request(f"{DRIVE_API}/files?{params}", token=token))
-    return result.get("files", [])
+    files = []
+    page_token = None
+    while True:
+        params_data = {"q": query, "fields": fields, "pageSize": 1000, "supportsAllDrives": "true", "includeItemsFromAllDrives": "true", "orderBy": "modifiedTime desc"}
+        if page_token:
+            params_data["pageToken"] = page_token
+        params = urlencode(params_data)
+        result = json.loads(_request(f"{DRIVE_API}/files?{params}", token=token))
+        files.extend(result.get("files", []))
+        page_token = result.get("nextPageToken")
+        if not page_token:
+            break
+    return files
+
+
+def list_workspace_tree(token, root_folder_id):
+    discovered = []
+    visited = set()
+    pending = [root_folder_id]
+    while pending:
+        folder_id = pending.pop()
+        if folder_id in visited:
+            continue
+        visited.add(folder_id)
+        children = list_workspace_children(token, folder_id)
+        discovered.extend(children)
+        for child in children:
+            if child.get("mimeType") == FOLDER_MIME:
+                pending.append(child["id"])
+    print(f"DRIVE_TREE_DISCOVERY folders={len(visited)} files={len(discovered)}")
+    return discovered
 
 
 def read_file_text(token, file_info):
@@ -91,14 +120,14 @@ def read_file_text(token, file_info):
 
 
 def discover_task_candidates(token, folder_id):
-    files = list_workspace_files(token, folder_id)
+    files = list_workspace_tree(token, folder_id)
     candidates = []
     for file_info in files:
         text = read_file_text(token, file_info)
         haystack = f"{file_info.get('name', '')}\n{text or ''}"
         ids = sorted({match.upper().replace("_", "-").replace(" ", "-") for match in TASK_ID_RE.findall(haystack)})
         if ids:
-            candidate = {"id": file_info["id"], "name": file_info.get("name"), "mimeType": file_info.get("mimeType"), "task_ids": ids}
+            candidate = {"id": file_info["id"], "name": file_info.get("name"), "mimeType": file_info.get("mimeType"), "task_ids": ids, "parents": file_info.get("parents", [])}
             candidates.append(candidate)
             print(f"DRIVE_TASK_CANDIDATE name={file_info.get('name')} task_ids={','.join(ids)} mimeType={file_info.get('mimeType')}")
     print(f"DRIVE_DISCOVERY files={len(files)} task_candidates={len(candidates)}")
