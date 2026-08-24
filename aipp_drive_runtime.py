@@ -16,12 +16,8 @@ def _request(url, method="GET", data=None, token=None, content_type=None):
     if content_type:
         headers["Content-Type"] = content_type
     req = Request(url, data=data, headers=headers, method=method)
-    try:
-        with urlopen(req) as response:
-            return response.read()
-    except HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Drive API HTTP {e.code}: {detail}") from e
+    with urlopen(req) as response:
+        return response.read()
 
 
 def get_credentials():
@@ -52,25 +48,31 @@ def get_access_token():
     raw = _request("https://oauth2.googleapis.com/token", method="POST", data=payload, content_type="application/x-www-form-urlencoded")
     result = json.loads(raw)
     if "access_token" not in result:
-        raise RuntimeError(f"HALT: OAuth response missing access_token: {result}")
+        raise RuntimeError("HALT: Google OAuth did not return an access token")
     return result["access_token"]
 
 
 def find_state_file(token, folder_id):
     query = f"name='{STATE_FILE}' and '{folder_id}' in parents and trashed=false"
-    params = urlencode({"q": query, "fields": "files(id,name,mimeType,capabilities(canDownload))"})
+    params = urlencode({"q": query, "fields": "files(id,name,mimeType,size,capabilities(canDownload),driveId)", "supportsAllDrives": "true", "includeItemsFromAllDrives": "true"})
     result = json.loads(_request(f"{DRIVE_API}/files?{params}", token=token))
     files = result.get("files", [])
-    return files[0] if files else None
+    if files:
+        f = files[0]
+        print(f"DRIVE_FILE_FOUND id={f.get('id')} mimeType={f.get('mimeType')} size={f.get('size')} canDownload={f.get('capabilities', {}).get('canDownload')} driveId={f.get('driveId')}")
+        return f
+    return None
 
 
 def read_drive_state(token, file_info):
     file_id = file_info["id"]
-    mime_type = file_info.get("mimeType", "")
-    if mime_type.startswith("application/vnd.google-apps."):
-        raise RuntimeError(f"HALT: aipp_state.json is a Google Workspace file ({mime_type})")
     params = urlencode({"alt": "media", "supportsAllDrives": "true"})
-    return json.loads(_request(f"{DRIVE_API}/files/{file_id}?{params}", token=token))
+    try:
+        raw = _request(f"{DRIVE_API}/files/{file_id}?{params}", token=token)
+    except HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HALT: Drive download failed HTTP {e.code}: {detail}") from e
+    return json.loads(raw)
 
 
 def main():
@@ -81,7 +83,6 @@ def main():
     file_info = find_state_file(token, folder_id)
     if not file_info:
         raise RuntimeError("HALT: aipp_state.json not found in configured Drive folder")
-    print(f"DRIVE_FILE_FOUND id={file_info['id']} mimeType={file_info.get('mimeType')} canDownload={file_info.get('capabilities', {}).get('canDownload')}")
     state = read_drive_state(token, file_info)
     if not isinstance(state, dict) or state.get("version") != "1.1.1":
         raise RuntimeError("HALT: Drive state is not a valid AIPP v1.1.1 state")
