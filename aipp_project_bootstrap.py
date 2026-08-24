@@ -27,8 +27,6 @@ def parse_project_boot(path):
         elif "**Active State:**" in line:
             active_state = line.split("**Active State:**", 1)[1].strip()
 
-        # Parse canonical Markdown task rows by cells rather than relying on
-        # formatting details such as backticks around individual cells.
         if line.lstrip().startswith("|"):
             cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
             if len(cells) >= 4:
@@ -44,18 +42,11 @@ def parse_project_boot(path):
                         "dependency_reason": dependency,
                     })
 
-    return {
-        "project": project,
-        "workspace_status": status,
-        "active_state": active_state,
-        "tasks": tasks,
-    }
+    return {"project": project, "workspace_status": status, "active_state": active_state, "tasks": tasks}
 
 
 def bootstrap_project(workspace, state):
-    boot_path = Path(workspace) / "PROJECT_BOOT.md"
-    boot = parse_project_boot(boot_path)
-
+    boot = parse_project_boot(Path(workspace) / "PROJECT_BOOT.md")
     state["active_project"] = boot["project"]
     state["project_bootstrap"] = {
         "workspace_status": boot["workspace_status"],
@@ -63,12 +54,16 @@ def bootstrap_project(workspace, state):
         "source": "PROJECT_BOOT.md",
     }
 
-    lifecycle = state["task_lifecycle"]
+    lifecycle = state.setdefault("task_lifecycle", {})
     for status in LIFECYCLE_STATUSES:
-        lifecycle.setdefault(status, [])
+        value = lifecycle.get(status)
+        if status == "NOW":
+            lifecycle[status] = value
+        elif not isinstance(value, list):
+            lifecycle[status] = []
 
     existing = {
-        status: {task.get("id") for task in lifecycle.get(status, [])}
+        status: ({task.get("id") for task in lifecycle[status]} if status != "NOW" else set())
         for status in LIFECYCLE_STATUSES
     }
 
@@ -76,10 +71,8 @@ def bootstrap_project(workspace, state):
         task_id = task["id"]
         status = task["status"]
 
-        # Canonical PROJECT_BOOT is authoritative for bootstrap mapping.
-        # Never move a task to NOW automatically. NOW remains authority-gated.
         if status == "NOW":
-            if lifecycle.get("NOW") is None and task_id not in existing["COMPLETED"]:
+            if lifecycle["NOW"] is None and task_id not in existing["COMPLETED"]:
                 lifecycle["NOW"] = task
             continue
 
@@ -88,14 +81,15 @@ def bootstrap_project(workspace, state):
 
         for other_status in LIFECYCLE_STATUSES - {status, "NOW"}:
             lifecycle[other_status] = [
-                item for item in lifecycle.get(other_status, [])
+                item for item in lifecycle[other_status]
                 if item.get("id") != task_id
             ]
+            existing[other_status].discard(task_id)
 
         lifecycle[status].append(task)
         existing[status].add(task_id)
 
-    state["status"] = "PROJECT_READY"
+    state["status"] = "PROPOSAL_READY"
     state["step"] = max(state.get("step", 0), 1)
-    state["authority_gate"]["last_action"] = "PROJECT_BOOTSTRAPPED"
+    state.setdefault("authority_gate", {})["last_action"] = "PROJECT_BOOTSTRAPPED"
     return state
