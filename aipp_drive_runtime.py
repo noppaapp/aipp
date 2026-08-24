@@ -81,7 +81,7 @@ def read_drive_state(token, file_info):
         detail = e.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"HALT: {error_label} failed HTTP {e.code}: {detail}") from e
     try:
-        return json.loads(raw.decode("utf-8"))
+        return json.loads(raw.decode("utf-8-sig"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         raise RuntimeError("HALT: Drive state content is not valid UTF-8 JSON text") from e
 
