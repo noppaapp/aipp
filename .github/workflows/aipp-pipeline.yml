@@ -58,6 +58,9 @@ jobs:
       - name: Run AIPP tests
         run: python -m pytest -q
 
+      - name: Run E2E session continuation proof
+        run: python -m pytest -q -s tests/e2e/test_session_continuation.py
+
       - name: Run AIPP
         env:
           AIPP_COMMAND: ${{ inputs.command }}
