@@ -2,6 +2,9 @@ import re
 from pathlib import Path
 
 
+LIFECYCLE_STATUSES = {"NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"}
+
+
 def parse_project_boot(path):
     text = Path(path).read_text(encoding="utf-8")
     project = None
@@ -17,13 +20,16 @@ def parse_project_boot(path):
         elif "**Active State:**" in line:
             active_state = line.split("**Active State:**", 1)[1].strip()
 
-        match = re.match(r"\|\s*\*\*(TASK-[^*]+)\*\*\s*\|\s*`?([^|]+?)`?\s*\|\s*`?(COMPLETED|NOW|DEFERRED|BLOCKED|FUTURE|REFERENCE)`?\s*\|\s*([^|]+?)\s*\|", line)
+        match = re.match(
+            r"\|\s*\*\*(TASK-[^*]+)\*\*\s*\|\s*`?([^|]+?)`?\s*\|\s*`?(COMPLETED|NOW|DEFERRED|BLOCKED|FUTURE|REFERENCE)`?\s*\|\s*([^|]+?)\s*\|",
+            line,
+        )
         if match:
             tasks.append({
                 "id": match.group(1).strip(),
                 "title": match.group(2).strip(),
                 "status": match.group(3).strip(),
-                "dependency_reason": match.group(4).strip()
+                "dependency_reason": match.group(4).strip(),
             })
 
     return {
@@ -46,14 +52,38 @@ def bootstrap_project(workspace, state):
     }
 
     lifecycle = state["task_lifecycle"]
-    completed = {task.get("id") for task in lifecycle.get("COMPLETED", [])}
-    future = {task.get("id") for task in lifecycle.get("FUTURE", [])}
+    for status in LIFECYCLE_STATUSES:
+        lifecycle.setdefault(status, [])
+
+    existing = {
+        status: {task.get("id") for task in lifecycle.get(status, [])}
+        for status in LIFECYCLE_STATUSES
+    }
 
     for task in boot["tasks"]:
-        if task["status"] == "COMPLETED" and task["id"] not in completed:
-            lifecycle["COMPLETED"].append(task)
-        elif task["status"] in {"FUTURE", "DEFERRED", "BLOCKED", "REFERENCE"} and task["id"] not in future:
-            lifecycle[task["status"]].append(task)
+        task_id = task["id"]
+        status = task["status"]
+
+        # Canonical PROJECT_BOOT is authoritative for bootstrap mapping.
+        # Never move a task to NOW automatically. NOW remains authority-gated.
+        if status == "NOW":
+            if lifecycle.get("NOW") is None and task_id not in existing["COMPLETED"]:
+                lifecycle["NOW"] = task
+            continue
+
+        if task_id in existing[status]:
+            continue
+
+        # If the same task exists in another lifecycle bucket, remove the stale
+        # copy before applying the canonical status from PROJECT_BOOT.
+        for other_status in LIFECYCLE_STATUSES - {status, "NOW"}:
+            lifecycle[other_status] = [
+                item for item in lifecycle.get(other_status, [])
+                if item.get("id") != task_id
+            ]
+
+        lifecycle[status].append(task)
+        existing[status].add(task_id)
 
     state["status"] = "PROJECT_READY"
     state["step"] = max(state.get("step", 0), 1)
