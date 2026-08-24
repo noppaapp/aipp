@@ -27,22 +27,33 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Verify checked-out revision
+        run: |
+          echo "CHECKED_OUT_COMMIT=$(git rev-parse HEAD)"
+          echo "RUNTIME_SHA=$(git hash-object aipp_drive_runtime.py)"
+          grep -n "Drive download failed HTTP\|DRIVE_FILE_FOUND" aipp_drive_runtime.py
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+
       - name: Pull canonical state from Google Drive
         env:
           GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: python aipp_drive_runtime.py
+
       - name: Validate canonical workspace
         run: |
           test -f AIPP.md
           test -f PROJECT_BOOT.md
+
       - name: Run AIPP tests
         run: pytest -q
+
       - name: Run AIPP
         run: |
           if [ -n "${{ inputs.task }}" ]; then
@@ -50,8 +61,10 @@ jobs:
           else
             python aipp_runner.py "${{ inputs.command }}" --workspace "."
           fi
+
       - name: Show canonical state
         run: cat aipp_state.json
+
       - name: Commit state artifact
         run: |
           git config user.name "AIPP Autonomous Runner"
