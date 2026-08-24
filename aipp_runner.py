@@ -1,8 +1,15 @@
 import argparse
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Keep local AIPP modules importable when the runner is invoked by absolute path
+# from an isolated workspace, as in the project bootstrap E2E test.
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
 from aipp_project_bootstrap import bootstrap_project
 
@@ -46,18 +53,8 @@ def default_state():
         "status": "INITIALIZED",
         "active_project": None,
         "execution_mode": "REAL",
-        "task_lifecycle": {
-            "NOW": None,
-            "DEFERRED": [],
-            "BLOCKED": [],
-            "FUTURE": [],
-            "REFERENCE": [],
-            "COMPLETED": []
-        },
-        "authority_gate": {
-            "pending_approval": None,
-            "last_action": "INITIALIZATION"
-        },
+        "task_lifecycle": {"NOW": None, "DEFERRED": [], "BLOCKED": [], "FUTURE": [], "REFERENCE": [], "COMPLETED": []},
+        "authority_gate": {"pending_approval": None, "last_action": "INITIALIZATION"},
         "step": 0,
         "runner_engine": "GitHub Actions Autonomous Cloud Runner"
     }
@@ -79,10 +76,7 @@ def initialize_state(state, workspace):
 
 
 def find_future_task(state, task_id):
-    for task in state["task_lifecycle"].get("FUTURE", []):
-        if task.get("id") == task_id:
-            return task
-    return None
+    return next((task for task in state["task_lifecycle"].get("FUTURE", []) if task.get("id") == task_id), None)
 
 
 def request_approval(state, task_id):
@@ -118,20 +112,10 @@ def execute_task(state, workspace):
         raise RuntimeError("HALT: No task in NOW state")
     if task.get("status") not in {"APPROVED", "NOW"}:
         raise RuntimeError(f"HALT: Task is not executable: {task.get('status')}")
-
     artifact_dir = Path(workspace) / ARTIFACT_DIR
     artifact_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_dir / f"{task['id']}-execution.json"
-    artifact = {
-        "task_id": task["id"],
-        "title": task.get("title"),
-        "execution_mode": state.get("execution_mode", "REAL"),
-        "executed_at": utc_now(),
-        "runner": state.get("runner_engine"),
-        "result": "EXECUTED"
-    }
-    save_json(artifact_path, artifact)
-
+    save_json(artifact_path, {"task_id": task["id"], "title": task.get("title"), "execution_mode": state.get("execution_mode", "REAL"), "executed_at": utc_now(), "runner": state.get("runner_engine"), "result": "EXECUTED"})
     task["status"] = "EXECUTED"
     task["artifact"] = str(artifact_path).replace("\\", "/")
     state["status"] = "EXECUTED"
@@ -150,7 +134,6 @@ def verify_task(state, workspace):
     artifact = load_json(artifact_path)
     if artifact.get("task_id") != task.get("id") or artifact.get("result") != "EXECUTED":
         raise RuntimeError("HALT: Artifact verification failed")
-
     task["status"] = "COMPLETED"
     task["verified_at"] = utc_now()
     state["task_lifecycle"]["COMPLETED"].append(task)
@@ -171,31 +154,26 @@ def main():
     validate_workspace()
     state = load_state()
     command = args.command.upper()
-
     if command == "BAŞLA":
         state = initialize_state(state, ".")
     elif command == "REQUEST_APPROVAL":
-        if not args.task:
-            raise RuntimeError("HALT: --task is required.")
+        if not args.task: raise RuntimeError("HALT: --task is required.")
         state = request_approval(state, args.task)
     elif command == "APPROVE":
-        if not args.task:
-            raise RuntimeError("HALT: --task is required.")
+        if not args.task: raise RuntimeError("HALT: --task is required.")
         state = approve_task(state, args.task)
     elif command == "EXECUTE":
         state = execute_task(state, ".")
     elif command == "VERIFY":
         state = verify_task(state, ".")
     elif command == "RUN":
-        if not args.task:
-            raise RuntimeError("HALT: --task is required.")
+        if not args.task: raise RuntimeError("HALT: --task is required.")
         state = request_approval(state, args.task)
         state = approve_task(state, args.task)
         state = execute_task(state, ".")
         state = verify_task(state, ".")
     else:
         raise RuntimeError(f"HALT: Unknown command: {args.command}")
-
     state["last_updated"] = utc_now()
     save_json(STATE_FILE, state)
     print(json.dumps(state, indent=2, ensure_ascii=False))
