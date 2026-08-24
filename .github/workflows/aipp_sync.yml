@@ -23,7 +23,7 @@ jobs:
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
-          python - <<'EOF'
+          python - <<'PY'
           import os, urllib.request, json, urllib.parse, sys
           from urllib.error import HTTPError
 
@@ -32,27 +32,23 @@ jobs:
           raw_creds = os.environ.get("GDRIVE_CREDENTIALS", "").strip()
 
           if not all([refresh_token, folder_id, raw_creds]):
-              print("HATA: GitHub Secrets eksik okunuyor! Lütfen secret isimlerini kontrol et.")
+              print("HATA: Gerekli GitHub Secrets okunamadı.")
               sys.exit(1)
 
+          client_id = client_secret = None
           try:
-              creds_json = json.loads(raw_creds)
-              client_id = creds_json.get("client_id") or creds_json.get("installed", {}).get("client_id") or creds_json.get("web", {}).get("client_id")
-              client_secret = creds_json.get("client_secret") or creds_json.get("installed", {}).get("client_secret") or creds_json.get("web", {}).get("client_secret")
-          except:
+              creds = json.loads(raw_creds)
+              client_id = creds.get("client_id") or creds.get("installed", {}).get("client_id") or creds.get("web", {}).get("client_id")
+              client_secret = creds.get("client_secret") or creds.get("installed", {}).get("client_secret") or creds.get("web", {}).get("client_secret")
+          except json.JSONDecodeError:
               parts = raw_creds.replace(";", " ").split()
               if len(parts) >= 2:
-                  client_id = parts[0]
-                  client_secret = parts[1]
-              else:
-                  print("HATA: GDRIVE_CREDENTIALS formatı anlaşılamadı.")
-                  sys.exit(1)
+                  client_id, client_secret = parts[0], parts[1]
 
           if not client_id or not client_secret:
-              print("HATA: client_id veya client_secret ayrıştırılamadı. GDRIVE_CREDENTIALS içeriğini kontrol et.")
+              print("HATA: GDRIVE_CREDENTIALS içinden Client ID/Secret ayrıştırılamadı.")
               sys.exit(1)
 
-          # 1. Refresh Token ile Access Token Al
           data = urllib.parse.urlencode({
               "client_id": client_id,
               "client_secret": client_secret,
@@ -62,7 +58,6 @@ jobs:
 
           req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
           req.add_header("Content-Type", "application/x-www-form-urlencoded")
-          
           try:
               res = urllib.request.urlopen(req)
               access_token = json.loads(res.read().decode("utf-8"))["access_token"]
@@ -72,60 +67,44 @@ jobs:
               print("Detay:", e.read().decode("utf-8"))
               sys.exit(1)
 
-          # 2. Drive'da aipp_state.json dosyasını ara
           file_name = "aipp_state.json"
           query = f"name = '{file_name}' and '{folder_id}' in parents and trashed = false"
           search_url = f"https://www.googleapis.com/drive/v3/files?{urllib.parse.urlencode({'q': query})}"
-          
           req = urllib.request.Request(search_url, headers={"Authorization": f"Bearer {access_token}"})
           try:
               response = urllib.request.urlopen(req)
-              files = json.loads(response.read().decode("utf-8"))["files"]
+              files = json.loads(response.read().decode("utf-8")).get("files", [])
           except HTTPError as e:
               print("Google Drive API Arama Hatası:", e.code)
               print("Detay:", e.read().decode("utf-8"))
               sys.exit(1)
 
-          local_file_path = "aipp_state.json"
-          if not os.path.exists(local_file_path):
-              with open(local_file_path, "w") as f:
-                  json.dump({"state": "initialized"}, f)
-
-          with open(local_file_path, "rb") as f:
+          with open("aipp_state.json", "rb") as f:
               file_content = f.read()
 
-          # Hatanın Çözüldüğü Kısım: Güncelleme ise folder_id gönderilmez!
           if files:
               file_id = files[0]["id"]
-              print(f"Mevcut dosya güncelleniyor (ID: {file_id})...")
+              print("Mevcut aipp_state.json güncelleniyor...")
               upload_url = f"https://www.googleapis.com/upload/drive/v3/files/{file_id}?uploadType=multipart"
               method = "PATCH"
-              file_metadata = {"name": file_name}
+              metadata = {"name": file_name}
           else:
-              print("Yeni dosya oluşturuluyor...")
+              print("aipp_state.json oluşturuluyor...")
               upload_url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
               method = "POST"
-              file_metadata = {"name": file_name, "parents": [folder_id]}
+              metadata = {"name": file_name, "parents": [folder_id]}
 
-          boundary = "foo_bar_baz"
+          boundary = "aipp_sync_boundary"
           body = (
-              f"--{boundary}\r\n"
-              f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
-              f"{json.dumps(file_metadata)}\r\n"
-              f"--{boundary}\r\n"
-              f"Content-Type: application/json\r\n\r\n"
-          ).encode("utf-8") + file_content + f"\r\n--{boundary}--\r\n".encode("utf-8")
+              f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"
+              f"{json.dumps(metadata)}\r\n"
+              f"--{boundary}\r\nContent-Type: application/json\r\n\r\n"
+          ).encode() + file_content + f"\r\n--{boundary}--\r\n".encode()
 
-          req = urllib.request.Request(
-              upload_url,
-              data=body,
-              headers={
-                  "Authorization": f"Bearer {access_token}",
-                  "Content-Type": f"multipart/related; boundary={boundary}"
-              },
-              method=method
-          )
-          
+          req = urllib.request.Request(upload_url, data=body, method=method, headers={
+              "Authorization": f"Bearer {access_token}",
+              "Content-Type": f"multipart/related; boundary={boundary}"
+          })
           try:
               resp = urllib.request.urlopen(req)
               print("Senkronizasyon başarıyla tamamlandı, HTTP Status:", resp.status)
@@ -133,4 +112,4 @@ jobs:
               print("Google Drive API Yükleme Hatası:", e.code)
               print("Detay:", e.read().decode("utf-8"))
               sys.exit(1)
-          EOF
+          PY
