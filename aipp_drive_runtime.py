@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -8,6 +9,7 @@ from urllib.error import HTTPError
 DRIVE_API = "https://www.googleapis.com/drive/v3"
 STATE_FILE = "aipp_state.json"
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
+TASK_ID_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 
 
 def _request(url, method="GET", data=None, token=None, content_type=None):
@@ -65,6 +67,44 @@ def find_state_file(token, folder_id):
     return None
 
 
+def list_workspace_files(token, folder_id):
+    query = f"'{folder_id}' in parents and trashed=false"
+    fields = "files(id,name,mimeType,size,modifiedTime,parents,capabilities(canDownload)),nextPageToken"
+    params = urlencode({"q": query, "fields": fields, "pageSize": 100, "supportsAllDrives": "true", "includeItemsFromAllDrives": "true", "orderBy": "modifiedTime desc"})
+    result = json.loads(_request(f"{DRIVE_API}/files?{params}", token=token))
+    return result.get("files", [])
+
+
+def read_file_text(token, file_info):
+    file_id = file_info["id"]
+    mime = file_info.get("mimeType")
+    if mime == GOOGLE_DOC_MIME:
+        endpoint = f"{DRIVE_API}/files/{file_id}/export?{urlencode({'mimeType': 'text/plain', 'supportsAllDrives': 'true'})}"
+    elif mime == "text/plain":
+        endpoint = f"{DRIVE_API}/files/{file_id}?{urlencode({'alt': 'media', 'supportsAllDrives': 'true'})}"
+    else:
+        return None
+    try:
+        return _request(endpoint, token=token).decode("utf-8-sig", errors="replace")
+    except HTTPError:
+        return None
+
+
+def discover_task_candidates(token, folder_id):
+    files = list_workspace_files(token, folder_id)
+    candidates = []
+    for file_info in files:
+        text = read_file_text(token, file_info)
+        haystack = f"{file_info.get('name', '')}\n{text or ''}"
+        ids = sorted({match.upper().replace("_", "-").replace(" ", "-") for match in TASK_ID_RE.findall(haystack)})
+        if ids:
+            candidate = {"id": file_info["id"], "name": file_info.get("name"), "mimeType": file_info.get("mimeType"), "task_ids": ids}
+            candidates.append(candidate)
+            print(f"DRIVE_TASK_CANDIDATE name={file_info.get('name')} task_ids={','.join(ids)} mimeType={file_info.get('mimeType')}")
+    print(f"DRIVE_DISCOVERY files={len(files)} task_candidates={len(candidates)}")
+    return candidates
+
+
 def read_drive_state(token, file_info):
     file_id = file_info["id"]
     if file_info.get("mimeType") == GOOGLE_DOC_MIME:
@@ -89,37 +129,22 @@ def read_drive_state(token, file_info):
 def normalize_state(state):
     if not isinstance(state, dict):
         raise RuntimeError("HALT: Drive state must be a JSON object")
-
-    # Migrate the legacy compact state currently stored in Drive into the
-    # schema required by aipp_runner.py. Preserve existing meaningful fields.
     defaults = {
         "version": "1.1.1",
         "status": "INITIALIZED",
         "active_project": None,
         "execution_mode": "REAL",
-        "task_lifecycle": {
-            "NOW": None,
-            "DEFERRED": [],
-            "BLOCKED": [],
-            "FUTURE": [],
-            "REFERENCE": [],
-            "COMPLETED": []
-        },
-        "authority_gate": {
-            "pending_approval": None,
-            "last_action": "INITIALIZATION"
-        },
+        "task_lifecycle": {"NOW": None, "DEFERRED": [], "BLOCKED": [], "FUTURE": [], "REFERENCE": [], "COMPLETED": []},
+        "authority_gate": {"pending_approval": None, "last_action": "INITIALIZATION"},
         "step": 0,
         "runner_engine": "GitHub Actions Autonomous Cloud Runner"
     }
-
     for key, value in defaults.items():
         if key not in state:
             state[key] = value
         elif isinstance(value, dict) and isinstance(state[key], dict):
             for nested_key, nested_value in value.items():
                 state[key].setdefault(nested_key, nested_value)
-
     state["version"] = "1.1.1"
     return state
 
@@ -133,8 +158,11 @@ def main():
     if not file_info:
         raise RuntimeError("HALT: aipp_state.json not found in configured Drive folder")
     state = normalize_state(read_drive_state(token, file_info))
+    candidates = discover_task_candidates(token, folder_id)
+    if state["task_lifecycle"].get("NOW") is None and not state["task_lifecycle"].get("FUTURE") and candidates:
+        state["discovered_task_candidates"] = candidates
     Path(STATE_FILE).write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"DRIVE_STATE_LOADED file_id={file_info['id']} version={state.get('version')} status={state.get('status')}")
+    print(f"DRIVE_STATE_LOADED file_id={file_info['id']} version={state.get('version')} status={state.get('status')} now={state['task_lifecycle'].get('NOW')} future={len(state['task_lifecycle'].get('FUTURE', []))}")
 
 
 if __name__ == "__main__":
