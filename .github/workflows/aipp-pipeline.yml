@@ -5,7 +5,7 @@ on:
     inputs:
       command:
         description: "AIPP command"
-        required: true
+        required: false
         default: "BAŞLA"
       task:
         description: "Task ID when required"
@@ -59,11 +59,15 @@ jobs:
         run: python -m pytest -q
 
       - name: Run AIPP
+        env:
+          AIPP_COMMAND: ${{ inputs.command }}
+          AIPP_TASK: ${{ inputs.task }}
         run: |
-          if [ -n "${{ inputs.task }}" ]; then
-            python aipp_runner.py "${{ inputs.command }}" --workspace "." --task "${{ inputs.task }}"
+          command="${AIPP_COMMAND:-BAŞLA}"
+          if [ -n "$AIPP_TASK" ]; then
+            python aipp_runner.py "$command" --workspace "." --task "$AIPP_TASK"
           else
-            python aipp_runner.py "${{ inputs.command }}" --workspace "."
+            python aipp_runner.py "$command" --workspace "."
           fi
 
       - name: Show canonical state
