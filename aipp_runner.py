@@ -13,7 +13,6 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from aipp_project_bootstrap import bootstrap_project
 
-STATE_FILE = "aipp_state.json"
 PROJECT_BOOT = "PROJECT_BOOT.md"
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
@@ -61,9 +60,9 @@ def default_state():
 
 
 def load_state():
-    if not Path(STATE_FILE).exists():
-        return default_state()
-    return load_json(STATE_FILE)
+    # Runtime state is ephemeral and exists only in process memory.
+    # Canonical project state is bootstrapped from PROJECT_BOOT.md.
+    return default_state()
 
 
 def initialize_state(state, workspace):
@@ -175,7 +174,7 @@ def main():
     else:
         raise RuntimeError(f"HALT: Unknown command: {args.command}")
     state["last_updated"] = utc_now()
-    save_json(STATE_FILE, state)
+    # Runtime state is intentionally not persisted to disk or Git.
     print(json.dumps(state, indent=2, ensure_ascii=False))
 
 
