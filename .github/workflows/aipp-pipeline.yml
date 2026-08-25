@@ -17,14 +17,13 @@ on:
       - "aipp_drive_runtime.py"
       - "AIPP.md"
       - "PROJECT_BOOT.md"
-      - "aipp_state.json"
       - ".github/workflows/aipp-pipeline.yml"
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -73,27 +72,9 @@ jobs:
             python aipp_runner.py "$command" --workspace "."
           fi
 
-      - name: Show canonical state
-        run: cat aipp_state.json
-
-      - name: Commit state artifact
+      - name: Runtime state is ephemeral
         run: |
-          git config user.name "AIPP Autonomous Runner"
-          git config user.email "aipp-runner@users.noreply.github.com"
-          git add aipp_state.json
-          if [ -d artifacts ]; then
-            git add artifacts/
-          fi
-          if git diff --cached --quiet; then
-            echo "No state change."
-          else
-            git commit -m "chore(aipp): update execution state"
-            git fetch origin main
-            if ! git rebase origin/main; then
-              echo "Rebase conflict detected; preserving this run's generated state artifact."
-              git checkout --theirs -- aipp_state.json
-              git add aipp_state.json
-              git rebase --continue
-            fi
-            git push origin HEAD:main
+          echo "AIPP runtime state is not committed to Git."
+          if [ -f aipp_state.json ]; then
+            echo "Runtime state exists only inside this execution environment."
           fi
