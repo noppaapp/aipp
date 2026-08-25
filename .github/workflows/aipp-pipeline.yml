@@ -15,8 +15,8 @@ on:
     paths:
       - "aipp_runner.py"
       - "aipp_drive_runtime.py"
+      - "aipp_project_bootstrap.py"
       - "AIPP.md"
-      - "PROJECT_BOOT.md"
       - ".github/workflows/aipp-pipeline.yml"
 
 concurrency:
@@ -36,7 +36,7 @@ jobs:
         run: |
           echo "CHECKED_OUT_COMMIT=$(git rev-parse HEAD)"
           echo "RUNTIME_SHA=$(git hash-object aipp_drive_runtime.py)"
-          grep -n "DRIVE_PROJECT_BOOT_FOUND\\|DRIVE_CANONICAL_STATE_MATERIALIZED\\|DRIVE_CANONICAL_STATE_READY" aipp_drive_runtime.py
+          grep -n "DRIVE_PROJECT_BOOT_FOUND\\|DRIVE_CANONICAL_STATE_PUBLISHED\\|DRIVE_CANONICAL_STATE_READY" aipp_drive_runtime.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,10 +53,8 @@ jobs:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: python aipp_drive_runtime.py
 
-      - name: Validate canonical workspace
-        run: |
-          test -f AIPP.md
-          test -f PROJECT_BOOT.md
+      - name: Validate protocol workspace
+        run: test -f AIPP.md
 
       - name: Run AIPP tests
         run: python -m pytest -q
@@ -80,6 +78,10 @@ jobs:
         run: |
           if [ -e aipp_state.json ]; then
             echo "HALT: aipp_state.json must not exist in the execution workspace."
+            exit 1
+          fi
+          if [ -e PROJECT_BOOT.md ]; then
+            echo "HALT: PROJECT_BOOT.md must not be materialized into the repository workspace."
             exit 1
           fi
           echo "EPHEMERAL_STATE_ASSERTION=PASS"
