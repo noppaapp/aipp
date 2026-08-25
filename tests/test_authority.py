@@ -5,10 +5,8 @@ def task():
     return {
         "id": "TASK-01",
         "title": "Execution proof",
-        "description": "Run the deterministic proof",
-        "dependency": "-",
-        "reason": "",
         "status": "FUTURE",
+        "dependency_reason": "-",
     }
 
 
@@ -40,7 +38,7 @@ def test_old_approval_does_not_authorize_changed_proposal(tmp_path):
     current = task()
     pid = proposal_id(current)
     changed = task()
-    changed["description"] = "Different proposal"
+    changed["dependency_reason"] = "TASK-00"
     log = tmp_path / "AUTHORITY_LOG.md"
     log.write_text(
         "| Proposal ID | Task ID | Decision | Timestamp | Note |\n"
