@@ -1,5 +1,6 @@
 name: AIPP Autonomous Pipeline
 
+# Canonical lifecycle isolation is verified on every pipeline run.
 on:
   workflow_dispatch:
     inputs:
