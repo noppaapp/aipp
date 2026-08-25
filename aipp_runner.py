@@ -10,6 +10,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from aipp_project_bootstrap import bootstrap_project
+from aipp_authority import AUTHORITY_LOG, is_approved, proposal_id
 
 PROJECT_BOOT = "PROJECT_BOOT.md"
 AIPP_SPEC = "AIPP.md"
@@ -79,21 +80,31 @@ def request_approval(state, task_id):
     task = find_future_task(state, task_id)
     if task is None:
         raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
-    state["authority_gate"]["pending_approval"] = task_id
+    state["authority_gate"]["pending_approval"] = {
+        "task_id": task_id,
+        "proposal_id": proposal_id(task),
+    }
     state["authority_gate"]["last_action"] = "APPROVAL_REQUESTED"
     state["status"] = "AWAITING_AUTHORITY"
     return state
 
 
-def approve_task(state, task_id):
+def approve_task(state, task_id, authority_log=AUTHORITY_LOG):
     pending = state["authority_gate"].get("pending_approval")
-    if pending != task_id:
+    if not isinstance(pending, dict) or pending.get("task_id") != task_id:
         raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
     task = find_future_task(state, task_id)
     if task is None:
         raise RuntimeError(f"HALT: Task disappeared from FUTURE: {task_id}")
+    expected_proposal = pending.get("proposal_id")
+    actual_proposal = proposal_id(task)
+    if expected_proposal != actual_proposal:
+        raise RuntimeError("HALT: Proposal changed after approval request")
+    if not is_approved(authority_log, task):
+        raise RuntimeError(f"HALT: Canonical Authority Gate approval not found: {actual_proposal}")
     state["task_lifecycle"]["FUTURE"].remove(task)
     task["status"] = "APPROVED"
+    task["proposal_id"] = actual_proposal
     state["authority_gate"]["pending_approval"] = None
     state["authority_gate"]["last_action"] = "APPROVED"
     state["task_lifecycle"]["NOW"] = task
@@ -145,6 +156,7 @@ def main():
     parser.add_argument("command", nargs="?", default="BAŞLA")
     parser.add_argument("--workspace", default=".")
     parser.add_argument("--task")
+    parser.add_argument("--authority-log", default=AUTHORITY_LOG)
     args = parser.parse_args()
     workspace = Path(args.workspace).resolve()
     workspace.mkdir(parents=True, exist_ok=True)
@@ -161,7 +173,11 @@ def main():
             raise RuntimeError("HALT: --task is required.")
         state = request_approval(state, args.task)
     elif command == "APPROVE":
-        raise RuntimeError("HALT: APPROVE requires a canonical Authority Gate transition; runtime memory cannot carry approval across sessions.")
+        if not args.task:
+            raise RuntimeError("HALT: --task is required.")
+        state = initialize_state(state, ".")
+        state = request_approval(state, args.task)
+        state = approve_task(state, args.task, args.authority_log)
     elif command == "EXECUTE":
         state = execute_task(state, ".")
     elif command == "VERIFY":
