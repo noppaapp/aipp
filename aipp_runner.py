@@ -100,6 +100,43 @@ def reconcile_discovered_tasks(state):
     return state
 
 
+def _dependency_is_satisfied(task, completed_ids):
+    dependency = str(task.get("dependency_reason") or "").strip()
+    if not dependency or dependency in {"-", "none", "None"}:
+        return True
+    tokens = [token.strip().strip("`*[]()") for token in dependency.replace(",", " ").split() if token.strip()]
+    task_refs = [token for token in tokens if token.upper().startswith("TASK-")]
+    return not task_refs or all(token in completed_ids for token in task_refs)
+
+
+def select_next_action(state):
+    """Select the next eligible task without changing lifecycle state or crossing authority."""
+    lifecycle = state.get("task_lifecycle", {})
+    completed = lifecycle.get("COMPLETED", []) or []
+    completed_ids = {task.get("id") for task in completed if isinstance(task, dict)}
+
+    now = lifecycle.get("NOW")
+    if isinstance(now, dict) and now.get("id") not in completed_ids and now.get("status") not in {"COMPLETED", "BLOCKED"}:
+        selected = now
+    else:
+        selected = None
+        for task in lifecycle.get("FUTURE", []) or []:
+            if not isinstance(task, dict):
+                continue
+            if task.get("status") in {"COMPLETED", "BLOCKED"} or task.get("id") in completed_ids:
+                continue
+            if _dependency_is_satisfied(task, completed_ids):
+                selected = task
+                break
+
+    state["next_action"] = {
+        "task_id": selected.get("id") if selected else None,
+        "reason": "ELIGIBLE_NOW" if selected else "NO_ELIGIBLE_TASK",
+    }
+    state.setdefault("authority_gate", {})["last_action"] = "NEXT_ACTION_SELECTED" if selected else "NO_NEXT_ACTION"
+    return state
+
+
 def default_state():
     return {
         "version": "1.1.1",
@@ -108,6 +145,7 @@ def default_state():
         "execution_mode": "REAL",
         "task_lifecycle": {"NOW": None, "DEFERRED": [], "BLOCKED": [], "FUTURE": [], "REFERENCE": [], "COMPLETED": []},
         "authority_gate": {"pending_approval": None, "last_action": "INITIALIZATION"},
+        "next_action": {"task_id": None, "reason": "NOT_EVALUATED"},
         "step": 0,
         "runner_engine": "GitHub Actions Autonomous Cloud Runner",
     }
@@ -219,9 +257,13 @@ def main():
     command = args.command.upper()
     if command == "BAŞLA":
         state = initialize_state(state, ".")
+        state = reconcile_discovered_tasks(state)
+        state = select_next_action(state)
+        state["status"] = "NEXT_ACTION_READY" if state["next_action"]["task_id"] else "NO_NEXT_ACTION"
     elif command == "RECONCILE":
         state = initialize_state(state, ".")
         state = reconcile_discovered_tasks(state)
+        state = select_next_action(state)
         state["status"] = "RECONCILED"
         state["step"] = 1
     elif command == "REQUEST_APPROVAL":
