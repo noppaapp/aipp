@@ -30,9 +30,6 @@ def parse_project_boot_text(text):
                 title = _clean_cell(cells[1])
                 task_status = _clean_cell(cells[2]).upper()
                 dependency = _clean_cell(cells[3])
-                # Task IDs are workspace-defined identifiers. AIPP must not
-                # invent a TASK- prefix requirement that the canonical workspace
-                # did not define.
                 if task_id and task_id.lower() not in {"task id", ":---"} and task_status in LIFECYCLE_STATUSES:
                     tasks.append({"id": task_id, "title": title, "status": task_status, "dependency_reason": dependency})
     return {"project": project, "workspace_status": status, "active_state": active_state, "tasks": tasks}
@@ -53,21 +50,21 @@ def bootstrap_project_from_text(text, state):
     lifecycle = state.setdefault("task_lifecycle", {})
     for status in LIFECYCLE_STATUSES:
         value = lifecycle.get(status)
-        lifecycle[status] = value if status == "NOW" else (value if isinstance(value, list) else [])
-    existing = {status: ({task.get("id") for task in lifecycle[status]} if status != "NOW" else set()) for status in LIFECYCLE_STATUSES}
+        lifecycle[status] = value if isinstance(value, list) else []
+    existing = {status: {task.get("id") for task in lifecycle[status]} for status in LIFECYCLE_STATUSES}
+    # PROJECT_BOOT is the canonical source for bootstrap mapping. Do not
+    # merge unrelated discovery candidates into its lifecycle state.
     for task in boot["tasks"]:
         task_id, status = task["id"], task["status"]
+        for other_status in LIFECYCLE_STATUSES:
+            if other_status != status:
+                lifecycle[other_status] = [item for item in lifecycle[other_status] if item.get("id") != task_id]
+                existing[other_status].discard(task_id)
         if status == "NOW":
-            if lifecycle["NOW"] is None and task_id not in existing["COMPLETED"]:
-                lifecycle["NOW"] = task
-            continue
-        if task_id in existing[status]:
-            continue
-        for other_status in LIFECYCLE_STATUSES - {status, "NOW"}:
-            lifecycle[other_status] = [item for item in lifecycle[other_status] if item.get("id") != task_id]
-            existing[other_status].discard(task_id)
-        lifecycle[status].append(task)
-        existing[status].add(task_id)
+            lifecycle["NOW"] = task
+        elif task_id not in existing[status]:
+            lifecycle[status].append(task)
+            existing[status].add(task_id)
     state["status"] = "PROPOSAL_READY"
     state["step"] = max(state.get("step", 0), 1)
     state.setdefault("authority_gate", {})["last_action"] = "PROJECT_BOOTSTRAPPED"
