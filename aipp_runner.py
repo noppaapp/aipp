@@ -44,6 +44,14 @@ def validate_workspace():
 
 
 def load_canonical_project_boot(workspace="."):
+    boot_path = Path(workspace) / "PROJECT_BOOT.md"
+
+    # A locally supplied PROJECT_BOOT.md is the explicit workspace input for
+    # isolated runner/tests. In GitHub Actions the file is intentionally absent,
+    # so the Drive runtime transport below becomes the canonical input.
+    if boot_path.exists():
+        return boot_path.read_text(encoding="utf-8")
+
     encoded = os.environ.get("AIPP_PROJECT_BOOT_B64", "").strip()
     if encoded:
         try:
@@ -51,10 +59,7 @@ def load_canonical_project_boot(workspace="."):
         except (ValueError, UnicodeDecodeError) as exc:
             raise RuntimeError("HALT: Canonical PROJECT_BOOT.md transport is invalid") from exc
 
-    boot_path = Path(workspace) / "PROJECT_BOOT.md"
-    if not boot_path.exists():
-        raise RuntimeError("HALT: Canonical PROJECT_BOOT.md was not supplied by Drive runtime")
-    return boot_path.read_text(encoding="utf-8")
+    raise RuntimeError("HALT: Canonical PROJECT_BOOT.md was not supplied by Drive runtime")
 
 
 def default_state():
