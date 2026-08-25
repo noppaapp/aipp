@@ -2,6 +2,7 @@ import io
 import os
 import re
 import zipfile
+import base64
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -97,9 +98,6 @@ def list_workspace_tree(token, root_folder_id):
 
 
 def find_project_boot(token, folder_id):
-    import json
-    # PROJECT_BOOT.md is canonical regardless of which nested Workspace folder contains it.
-    # The configured Drive folder is the workspace root, not necessarily the direct parent.
     files = [file_info for file_info in list_workspace_tree(token, folder_id) if file_info.get("name") == PROJECT_BOOT]
     if not files:
         return None
@@ -134,8 +132,7 @@ def _read_zip(raw):
                 if info.is_dir() or Path(info.filename).suffix.lower() not in ZIP_TEXT_EXTENSIONS or info.file_size > 2_000_000:
                     continue
                 try:
-                    text = archive.read(info).decode("utf-8-sig", errors="replace")
-                    chunks.append(f"\n--- {info.filename} ---\n{text}")
+                    chunks.append(f"\n--- {info.filename} ---\n{archive.read(info).decode('utf-8-sig', errors='replace')}")
                 except Exception:
                     continue
         return "".join(chunks) if chunks else None
@@ -177,13 +174,15 @@ def read_file_text(token, file_info):
     return None
 
 
-def download_project_boot(token, file_info, destination=PROJECT_BOOT):
-    text = read_file_text(token, file_info)
-    if text is None:
-        raise RuntimeError("HALT: PROJECT_BOOT.md could not be read from Google Drive")
-    Path(destination).write_text(text, encoding="utf-8")
-    print(f"DRIVE_CANONICAL_STATE_MATERIALIZED file={destination} source_id={file_info['id']}")
-    return text
+def publish_boot_to_runtime_env(text):
+    """Pass canonical Drive content through the ephemeral Actions environment, never the repository filesystem."""
+    encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    env_file = os.environ.get("GITHUB_ENV")
+    if not env_file:
+        raise RuntimeError("HALT: GITHUB_ENV is unavailable; refusing to materialize PROJECT_BOOT.md on disk")
+    with open(env_file, "a", encoding="utf-8") as handle:
+        handle.write(f"AIPP_PROJECT_BOOT_B64={encoded}\n")
+    print("DRIVE_CANONICAL_STATE_PUBLISHED transport=GITHUB_ENV storage=ephemeral")
 
 
 def discover_task_candidates(token, folder_id):
@@ -205,7 +204,6 @@ def discover_task_candidates(token, folder_id):
         ids = sorted({m.upper().replace("_", "-").replace(" ", "-") for m in TASK_ID_RE.findall(haystack)})
         if ids:
             candidates.append({"id": file_info["id"], "name": file_info.get("name"), "mimeType": mime, "task_ids": ids, "parents": file_info.get("parents", [])})
-            print(f"DRIVE_TASK_CANDIDATE name={file_info.get('name')} task_ids={','.join(ids)} mimeType={mime}")
     mime_summary = ",".join(f"{key}:{value}" for key, value in sorted(mime_counts.items()))
     print(f"DRIVE_DISCOVERY files={scanned_files} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} mime_types={mime_summary}")
     return candidates
@@ -219,7 +217,10 @@ def main():
     boot_info = find_project_boot(token, folder_id)
     if not boot_info:
         raise RuntimeError("HALT: PROJECT_BOOT.md not found in configured Drive folder")
-    download_project_boot(token, boot_info)
+    boot_text = read_file_text(token, boot_info)
+    if boot_text is None:
+        raise RuntimeError("HALT: PROJECT_BOOT.md could not be read from Google Drive")
+    publish_boot_to_runtime_env(boot_text)
     discover_task_candidates(token, folder_id)
     print("DRIVE_CANONICAL_STATE_READY source=PROJECT_BOOT.md runtime_state=purely_ephemeral")
 
