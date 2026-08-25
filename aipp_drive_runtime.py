@@ -98,8 +98,20 @@ def list_workspace_tree(token, root_folder_id):
 
 
 def find_project_boot(token, folder_id):
-    files = [file_info for file_info in list_workspace_tree(token, folder_id) if file_info.get("name") == PROJECT_BOOT]
+    all_files = list_workspace_tree(token, folder_id)
+    files = [file_info for file_info in all_files if file_info.get("name") == PROJECT_BOOT]
     if not files:
+        suspects = [
+            {
+                "name": file_info.get("name"),
+                "mimeType": file_info.get("mimeType"),
+                "id": file_info.get("id"),
+                "parents": file_info.get("parents", []),
+            }
+            for file_info in all_files
+            if "project" in file_info.get("name", "").lower() or "boot" in file_info.get("name", "").lower()
+        ]
+        print(f"DRIVE_PROJECT_BOOT_MISSING expected={PROJECT_BOOT} suspects={suspects}")
         return None
     if len(files) > 1:
         ids = ",".join(file_info.get("id", "") for file_info in files)
