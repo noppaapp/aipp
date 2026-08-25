@@ -6,11 +6,11 @@ import re
 from pathlib import Path
 
 AUTHORITY_LOG = "AUTHORITY_LOG.md"
+AUTHORITY_ENV = "AIPP_AUTHORITY_LOG_B64"
 PROPOSAL_PREFIX = "PROP"
 
 
 def _canonical_payload(task):
-    """Return only proposal-defining fields in deterministic form."""
     return {
         "id": task.get("id"),
         "title": task.get("title"),
@@ -20,32 +20,21 @@ def _canonical_payload(task):
 
 
 def proposal_id(task):
-    """Create a stable proposal ID from proposal-defining task content."""
     task_id = task.get("id")
     if not task_id:
         raise ValueError("Proposal requires a task id")
     encoded = json.dumps(
-        _canonical_payload(task),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
+        _canonical_payload(task), ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
     digest = hashlib.sha256(encoded).hexdigest()[:12].upper()
     safe_task = re.sub(r"[^A-Z0-9]+", "-", str(task_id).upper()).strip("-")
     return f"{PROPOSAL_PREFIX}-{safe_task}-{digest}"
 
 
-def parse_authority_log(path):
-    """Parse strict approval rows from AUTHORITY_LOG.md.
-
-    Expected table columns: Proposal ID, Task ID, Decision, Timestamp, Note.
-    Unknown/malformed rows are ignored rather than granting authority.
-    """
-    path = Path(path)
-    if not path.exists():
-        return []
+def parse_authority_log_text(text):
+    """Parse approvals from canonical Authority Log content already in memory."""
     approvals = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in (text or "").splitlines():
         if not line.startswith("|"):
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
@@ -62,7 +51,20 @@ def parse_authority_log(path):
     return approvals
 
 
-def is_approved(path, task):
-    """Return True only when task and deterministic proposal ID both match."""
+def parse_authority_log(source):
+    """Compatibility adapter for tests/tools; runner itself supplies Drive content as text."""
+    if isinstance(source, Path):
+        if not source.exists():
+            return []
+        return parse_authority_log_text(source.read_text(encoding="utf-8"))
+    if isinstance(source, str):
+        return parse_authority_log_text(source)
+    return []
+
+
+def is_approved(source, task):
     pid = proposal_id(task)
-    return any(row["proposal_id"] == pid and row["task_id"] == task.get("id") for row in parse_authority_log(path))
+    return any(
+        row["proposal_id"] == pid and row["task_id"] == task.get("id")
+        for row in parse_authority_log(source)
+    )
