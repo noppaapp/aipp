@@ -51,8 +51,6 @@ def load_canonical_project_boot(workspace="."):
         except (ValueError, UnicodeDecodeError) as exc:
             raise RuntimeError("HALT: Canonical PROJECT_BOOT.md transport is invalid") from exc
 
-    # Local PROJECT_BOOT.md is the workflow-delivered snapshot of the canonical
-    # Drive file. It is input-only for the runner and is never written back.
     boot_path = Path(workspace) / "PROJECT_BOOT.md"
     if not boot_path.exists():
         raise RuntimeError("HALT: Canonical PROJECT_BOOT.md was not supplied by Drive runtime")
@@ -92,7 +90,8 @@ def request_approval(state, task_id):
     task = find_future_task(state, task_id)
     if task is None:
         raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
-    state["authority_gate"]["pending_approval"] = {"task_id": task_id, "proposal_id": proposal_id(task)}
+    state["authority_gate"]["pending_approval"] = task_id
+    state["authority_gate"]["pending_proposal_id"] = proposal_id(task)
     state["authority_gate"]["last_action"] = "APPROVAL_REQUESTED"
     state["status"] = "AWAITING_AUTHORITY"
     return state
@@ -100,12 +99,12 @@ def request_approval(state, task_id):
 
 def approve_task(state, task_id, authority_log=AUTHORITY_LOG):
     pending = state["authority_gate"].get("pending_approval")
-    if not isinstance(pending, dict) or pending.get("task_id") != task_id:
+    if pending != task_id:
         raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
     task = find_future_task(state, task_id)
     if task is None:
         raise RuntimeError(f"HALT: Task disappeared from FUTURE: {task_id}")
-    expected_proposal = pending.get("proposal_id")
+    expected_proposal = state["authority_gate"].get("pending_proposal_id")
     actual_proposal = proposal_id(task)
     if expected_proposal != actual_proposal:
         raise RuntimeError("HALT: Proposal changed after approval request")
@@ -115,6 +114,7 @@ def approve_task(state, task_id, authority_log=AUTHORITY_LOG):
     task["status"] = "APPROVED"
     task["proposal_id"] = actual_proposal
     state["authority_gate"]["pending_approval"] = None
+    state["authority_gate"]["pending_proposal_id"] = None
     state["authority_gate"]["last_action"] = "APPROVED"
     state["task_lifecycle"]["NOW"] = task
     state["status"] = "NOW"
