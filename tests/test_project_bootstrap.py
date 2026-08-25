@@ -52,4 +52,6 @@ def test_project_bootstrap_maps_canonical_workspace(tmp_path):
     assert [x["id"] for x in output["task_lifecycle"]["COMPLETED"]] == ["TASK-01"]
     assert [x["id"] for x in output["task_lifecycle"]["FUTURE"]] == ["TASK-02"]
     assert output["task_lifecycle"]["NOW"] is None
-    assert output["status"] == "PROPOSAL_READY"
+    assert output["next_action"]["task_id"] == "TASK-02"
+    assert output["status"] == "NEXT_ACTION_READY"
+    assert "task_lifecycle" not in output["discovered_candidates"] if output["discovered_candidates"] else True
