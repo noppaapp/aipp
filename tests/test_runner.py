@@ -34,7 +34,25 @@ def test_bootstrap_is_ephemeral(tmp_path):
 
     assert state["active_project"] == "AIPP"
     assert state["task_lifecycle"]["FUTURE"][0]["id"] == "TASK-01"
+    assert state["next_action"]["task_id"] == "TASK-01"
     assert not (tmp_path / "aipp_state.json").exists()
+
+
+def test_next_action_skips_completed_and_blocked(tmp_path):
+    (tmp_path / "AIPP.md").write_text("# test\n", encoding="utf-8")
+    (tmp_path / "PROJECT_BOOT.md").write_text(
+        "# PROJECT_BOOT: AIPP\n\n"
+        "**Workspace Status:** ACTIVE\n"
+        "**Active State:** [READY]\n\n"
+        "| Task ID | Task Description | Status | Dependency / Reason |\n"
+        "| :--- | :--- | :--- | :--- |\n"
+        "| **TASK-01** | `Done` | `COMPLETED` | - |\n"
+        "| **TASK-02** | `Blocked` | `BLOCKED` | - |\n"
+        "| **TASK-03** | `Next` | `FUTURE` | TASK-01 |\n",
+        encoding="utf-8",
+    )
+    state = json.loads(run("BAŞLA", cwd=tmp_path).stdout)
+    assert state["next_action"]["task_id"] == "TASK-03"
 
 
 def test_authority_gate_does_not_persist_across_sessions(tmp_path):
