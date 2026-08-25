@@ -4,6 +4,7 @@ import re
 import zipfile
 import base64
 import copy
+import json
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -37,7 +38,6 @@ def _request(url, method="GET", data=None, token=None, content_type=None):
 
 
 def get_credentials():
-    import json
     raw = os.environ.get("GDRIVE_CREDENTIALS", "").strip()
     if not raw:
         raise RuntimeError("HALT: GDRIVE_CREDENTIALS is empty")
@@ -57,7 +57,6 @@ def get_credentials():
 
 
 def get_access_token():
-    import json
     client_id, client_secret = get_credentials()
     refresh_token = os.environ.get("GCP_REFRESH_TOKEN", "").strip()
     if not refresh_token:
@@ -70,7 +69,6 @@ def get_access_token():
 
 
 def list_workspace_children(token, folder_id):
-    import json
     query = f"'{folder_id}' in parents and trashed=false"
     fields = "files(id,name,mimeType,size,modifiedTime,parents,capabilities(canDownload)),nextPageToken"
     files, page_token = [], None
@@ -193,26 +191,26 @@ def read_file_text(token, file_info):
     return None
 
 
-def publish_boot_to_runtime_env(text):
-    """Pass canonical Drive content through the ephemeral Actions environment."""
-    encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
+def _publish_env(name, value, label):
+    encoded = base64.b64encode(value.encode("utf-8")).decode("ascii")
     env_file = os.environ.get("GITHUB_ENV")
     if not env_file:
-        raise RuntimeError("HALT: GITHUB_ENV is unavailable; refusing to materialize PROJECT_BOOT.md on disk")
+        raise RuntimeError(f"HALT: GITHUB_ENV is unavailable; refusing to materialize {label} on disk")
     with open(env_file, "a", encoding="utf-8") as handle:
-        handle.write(f"AIPP_PROJECT_BOOT_B64={encoded}\n")
-    print("DRIVE_CANONICAL_STATE_PUBLISHED transport=GITHUB_ENV storage=ephemeral")
+        handle.write(f"{name}={encoded}\n")
+    print(f"{label}_PUBLISHED transport=GITHUB_ENV storage=ephemeral")
+
+
+def publish_boot_to_runtime_env(text):
+    _publish_env("AIPP_PROJECT_BOOT_B64", text, "DRIVE_CANONICAL_STATE")
 
 
 def publish_authority_to_runtime_env(text):
-    """Pass canonical human authority decisions through ephemeral Actions transport."""
-    encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
-    env_file = os.environ.get("GITHUB_ENV")
-    if not env_file:
-        raise RuntimeError("HALT: GITHUB_ENV is unavailable; refusing to materialize AUTHORITY_LOG.md on disk")
-    with open(env_file, "a", encoding="utf-8") as handle:
-        handle.write(f"AIPP_AUTHORITY_LOG_B64={encoded}\n")
-    print("DRIVE_AUTHORITY_PUBLISHED transport=GITHUB_ENV storage=ephemeral")
+    _publish_env("AIPP_AUTHORITY_LOG_B64", text, "DRIVE_AUTHORITY")
+
+
+def publish_task_candidates_to_runtime_env(candidates):
+    _publish_env("AIPP_TASK_CANDIDATES_B64", json.dumps(candidates, ensure_ascii=False, separators=(",", ":")), "DRIVE_TASK_CANDIDATES")
 
 
 def discover_task_candidates(token, folder_id):
@@ -239,31 +237,6 @@ def discover_task_candidates(token, folder_id):
     return candidates
 
 
-def reconcile_discovered_tasks(state, candidates):
-    result = copy.deepcopy(state)
-    lifecycle = result.setdefault("task_lifecycle", {})
-    for status in ("NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"):
-        lifecycle.setdefault(status, None if status == "NOW" else [])
-    result.setdefault("authority_gate", {})
-    existing_ids = set()
-    for status in ("DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"):
-        for task in lifecycle.get(status) or []:
-            if isinstance(task, dict) and task.get("id"):
-                existing_ids.add(task["id"])
-    now_task = lifecycle.get("NOW")
-    if isinstance(now_task, dict) and now_task.get("id"):
-        existing_ids.add(now_task["id"])
-    for candidate in candidates or []:
-        for task_id in candidate.get("task_ids", []):
-            if task_id in existing_ids:
-                continue
-            lifecycle["FUTURE"].append({"id": task_id, "status": "PROPOSED", "source": {"file_id": candidate.get("id"), "file_name": candidate.get("name")}})
-            existing_ids.add(task_id)
-    result["authority_gate"]["pending_approval"] = None
-    result["authority_gate"]["last_action"] = "WORKSPACE_DISCOVERY_PROPOSALS"
-    return result
-
-
 def main():
     token = get_access_token()
     folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
@@ -287,6 +260,7 @@ def main():
         publish_authority_to_runtime_env("")
 
     candidates = discover_task_candidates(token, folder_id)
+    publish_task_candidates_to_runtime_env(candidates)
     print(f"DRIVE_RECONCILIATION_READY candidates={len(candidates)} authority_gate=REQUIRED")
     print("DRIVE_CANONICAL_STATE_READY source=PROJECT_BOOT.md authority_source=AUTHORITY_LOG.md runtime_state=purely_ephemeral")
 
