@@ -43,14 +43,20 @@ def validate_workspace():
         raise RuntimeError("HALT: Missing AIPP.md protocol specification")
 
 
-def load_canonical_project_boot():
+def load_canonical_project_boot(workspace="."):
     encoded = os.environ.get("AIPP_PROJECT_BOOT_B64", "").strip()
-    if not encoded:
+    if encoded:
+        try:
+            return base64.b64decode(encoded).decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise RuntimeError("HALT: Canonical PROJECT_BOOT.md transport is invalid") from exc
+
+    # Local PROJECT_BOOT.md is the workflow-delivered snapshot of the canonical
+    # Drive file. It is input-only for the runner and is never written back.
+    boot_path = Path(workspace) / "PROJECT_BOOT.md"
+    if not boot_path.exists():
         raise RuntimeError("HALT: Canonical PROJECT_BOOT.md was not supplied by Drive runtime")
-    try:
-        return base64.b64decode(encoded).decode("utf-8")
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise RuntimeError("HALT: Canonical PROJECT_BOOT.md transport is invalid") from exc
+    return boot_path.read_text(encoding="utf-8")
 
 
 def default_state():
@@ -71,7 +77,7 @@ def load_state():
 
 
 def initialize_state(state, workspace):
-    state = bootstrap_project_from_text(load_canonical_project_boot(), state)
+    state = bootstrap_project_from_text(load_canonical_project_boot(workspace), state)
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
     state["authority_gate"]["last_action"] = "INITIALIZATION"
@@ -175,11 +181,7 @@ def main():
         state = initialize_state(state, ".")
         state = request_approval(state, args.task)
     elif command == "APPROVE":
-        if not args.task:
-            raise RuntimeError("HALT: --task is required.")
-        state = initialize_state(state, ".")
-        state = request_approval(state, args.task)
-        state = approve_task(state, args.task, args.authority_log)
+        raise RuntimeError("HALT: canonical Authority Gate transition requires external human approval; APPROVE cannot be performed by an ephemeral runner session")
     elif command == "EXECUTE":
         state = execute_task(state, ".")
     elif command == "VERIFY":
