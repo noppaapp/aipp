@@ -7,7 +7,7 @@ on:
       command:
         description: "AIPP command"
         required: false
-        default: "BAŞLA"
+        default: "RUN"
       task:
         description: "Task ID when required"
         required: false
@@ -16,6 +16,7 @@ on:
     paths:
       - "aipp_runner.py"
       - "aipp_drive_runtime.py"
+      - "aipp_drive_writeback.py"
       - "aipp_project_bootstrap.py"
       - "aipp_authority.py"
       - "tests/**"
@@ -65,12 +66,15 @@ jobs:
       - name: Run E2E session continuation proof
         run: python -m pytest -q -s tests/e2e/test_session_continuation.py
 
-      - name: Run AIPP
+      - name: Run AIPP autonomous cycle
         env:
           AIPP_COMMAND: ${{ inputs.command }}
           AIPP_TASK: ${{ inputs.task }}
+          GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
-          command="${AIPP_COMMAND:-BAŞLA}"
+          command="${AIPP_COMMAND:-RUN}"
           if [ -n "$AIPP_TASK" ]; then
             python aipp_runner.py "$command" --workspace "." --task "$AIPP_TASK"
           else
