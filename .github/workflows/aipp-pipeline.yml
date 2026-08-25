@@ -16,6 +16,8 @@ on:
       - "aipp_runner.py"
       - "aipp_drive_runtime.py"
       - "aipp_project_bootstrap.py"
+      - "aipp_authority.py"
+      - "tests/**"
       - "AIPP.md"
       - ".github/workflows/aipp-pipeline.yml"
 
@@ -36,7 +38,7 @@ jobs:
         run: |
           echo "CHECKED_OUT_COMMIT=$(git rev-parse HEAD)"
           echo "RUNTIME_SHA=$(git hash-object aipp_drive_runtime.py)"
-          grep -n "DRIVE_PROJECT_BOOT_FOUND\\|DRIVE_CANONICAL_STATE_PUBLISHED\\|DRIVE_CANONICAL_STATE_READY" aipp_drive_runtime.py
+          grep -n "DRIVE_PROJECT_BOOT_FOUND\|DRIVE_CANONICAL_STATE_PUBLISHED\|DRIVE_CANONICAL_STATE_READY" aipp_drive_runtime.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
