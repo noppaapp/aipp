@@ -30,7 +30,10 @@ def parse_project_boot_text(text):
                 title = _clean_cell(cells[1])
                 task_status = _clean_cell(cells[2]).upper()
                 dependency = _clean_cell(cells[3])
-                if task_id.startswith("TASK-") and task_status in LIFECYCLE_STATUSES:
+                # Task IDs are workspace-defined identifiers. AIPP must not
+                # invent a TASK- prefix requirement that the canonical workspace
+                # did not define.
+                if task_id and task_id.lower() not in {"task id", ":---"} and task_status in LIFECYCLE_STATUSES:
                     tasks.append({"id": task_id, "title": title, "status": task_status, "dependency_reason": dependency})
     return {"project": project, "workspace_status": status, "active_state": active_state, "tasks": tasks}
 
@@ -45,7 +48,7 @@ def bootstrap_project_from_text(text, state):
     state["project_bootstrap"] = {
         "workspace_status": boot["workspace_status"],
         "active_state": boot["active_state"],
-        "source": "Google Drive:PROJECT_BOOT.md",
+        "source": "PROJECT_BOOT.md",
     }
     lifecycle = state.setdefault("task_lifecycle", {})
     for status in LIFECYCLE_STATUSES:
