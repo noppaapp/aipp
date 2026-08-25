@@ -80,11 +80,7 @@ def load_discovered_candidates():
 
 
 def reconcile_discovered_tasks(state):
-    """Merge Drive-discovered task IDs into the ephemeral FUTURE queue.
-
-    Discovery is advisory only. It never approves a task and never moves a task
-    beyond FUTURE. Approval still requires the canonical Authority Log.
-    """
+    """Merge Drive discovery into the ephemeral FUTURE queue only."""
     lifecycle = state.setdefault("task_lifecycle", {})
     lifecycle.setdefault("FUTURE", [])
     existing = {task.get("id") for task in lifecycle["FUTURE"] if isinstance(task, dict)}
@@ -97,10 +93,7 @@ def reconcile_discovered_tasks(state):
                 "title": f"Drive-discovered task {task_id}",
                 "status": "PROPOSED",
                 "dependency_reason": "Discovered in canonical Drive workspace",
-                "source": {
-                    "file_id": candidate.get("id"),
-                    "file_name": candidate.get("name"),
-                },
+                "source": {"file_id": candidate.get("id"), "file_name": candidate.get("name")},
             })
             existing.add(task_id)
     state.setdefault("authority_gate", {})["last_action"] = "WORKSPACE_DISCOVERY_PROPOSALS"
@@ -126,7 +119,6 @@ def load_state():
 
 def initialize_state(state, workspace):
     state = bootstrap_project_from_text(load_canonical_project_boot(workspace), state)
-    state = reconcile_discovered_tasks(state)
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
     state["authority_gate"]["last_action"] = "INITIALIZATION"
@@ -152,7 +144,6 @@ def approve_task(state, task_id, authority_log=None):
     task = find_future_task(state, task_id)
     if task is None:
         raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
-
     actual_proposal = proposal_id(task)
     pending = state["authority_gate"].get("pending_approval")
     pending_proposal = state["authority_gate"].get("pending_proposal_id")
@@ -160,11 +151,9 @@ def approve_task(state, task_id, authority_log=None):
         raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
     if pending_proposal is not None and pending_proposal != actual_proposal:
         raise RuntimeError("HALT: Proposal changed after approval request")
-
     source = load_canonical_authority_log() if authority_log is None else authority_log
     if not is_approved(source, task):
         raise RuntimeError(f"HALT: canonical Authority Gate transition missing approval: {actual_proposal}")
-
     state["task_lifecycle"]["FUTURE"].remove(task)
     task["status"] = "APPROVED"
     task["proposal_id"] = actual_proposal
@@ -230,15 +219,22 @@ def main():
     command = args.command.upper()
     if command == "BAŞLA":
         state = initialize_state(state, ".")
+    elif command == "RECONCILE":
+        state = initialize_state(state, ".")
+        state = reconcile_discovered_tasks(state)
+        state["status"] = "RECONCILED"
+        state["step"] = 1
     elif command == "REQUEST_APPROVAL":
         if not args.task:
             raise RuntimeError("HALT: --task is required.")
         state = initialize_state(state, ".")
+        state = reconcile_discovered_tasks(state)
         state = request_approval(state, args.task)
     elif command == "APPROVE":
         if not args.task:
             raise RuntimeError("HALT: --task is required.")
         state = initialize_state(state, ".")
+        state = reconcile_discovered_tasks(state)
         state = approve_task(state, args.task)
     elif command == "EXECUTE":
         state = execute_task(state, ".")
