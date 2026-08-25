@@ -16,6 +16,7 @@ except ImportError:
 
 DRIVE_API = "https://www.googleapis.com/drive/v3"
 PROJECT_BOOT = "PROJECT_BOOT.md"
+AUTHORITY_LOG = "AUTHORITY_LOG.md"
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
 GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation"
@@ -113,6 +114,20 @@ def find_project_boot(token, folder_id):
     return file_info
 
 
+def find_authority_log(token, folder_id):
+    all_files = list_workspace_tree(token, folder_id)
+    files = [file_info for file_info in all_files if file_info.get("name") == AUTHORITY_LOG]
+    if not files:
+        print(f"DRIVE_AUTHORITY_LOG_MISSING expected={AUTHORITY_LOG}")
+        return None
+    if len(files) > 1:
+        ids = ",".join(file_info.get("id", "") for file_info in files)
+        raise RuntimeError(f"HALT: multiple {AUTHORITY_LOG} files found in configured Drive workspace: {ids}")
+    file_info = files[0]
+    print(f"DRIVE_AUTHORITY_LOG_FOUND id={file_info.get('id')} mimeType={file_info.get('mimeType')} modifiedTime={file_info.get('modifiedTime')}")
+    return file_info
+
+
 def _download_binary(token, file_id):
     endpoint = f"{DRIVE_API}/files/{file_id}?{urlencode({'alt': 'media', 'supportsAllDrives': 'true'})}"
     return _request(endpoint, token=token)
@@ -179,7 +194,7 @@ def read_file_text(token, file_info):
 
 
 def publish_boot_to_runtime_env(text):
-    """Pass canonical Drive content through the ephemeral Actions environment, never the repository filesystem."""
+    """Pass canonical Drive content through the ephemeral Actions environment."""
     encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
     env_file = os.environ.get("GITHUB_ENV")
     if not env_file:
@@ -187,6 +202,17 @@ def publish_boot_to_runtime_env(text):
     with open(env_file, "a", encoding="utf-8") as handle:
         handle.write(f"AIPP_PROJECT_BOOT_B64={encoded}\n")
     print("DRIVE_CANONICAL_STATE_PUBLISHED transport=GITHUB_ENV storage=ephemeral")
+
+
+def publish_authority_to_runtime_env(text):
+    """Pass canonical human authority decisions through ephemeral Actions transport."""
+    encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    env_file = os.environ.get("GITHUB_ENV")
+    if not env_file:
+        raise RuntimeError("HALT: GITHUB_ENV is unavailable; refusing to materialize AUTHORITY_LOG.md on disk")
+    with open(env_file, "a", encoding="utf-8") as handle:
+        handle.write(f"AIPP_AUTHORITY_LOG_B64={encoded}\n")
+    print("DRIVE_AUTHORITY_PUBLISHED transport=GITHUB_ENV storage=ephemeral")
 
 
 def discover_task_candidates(token, folder_id):
@@ -214,13 +240,11 @@ def discover_task_candidates(token, folder_id):
 
 
 def reconcile_discovered_tasks(state, candidates):
-    """Map discovered task IDs into FUTURE proposals without crossing Authority Gate."""
     result = copy.deepcopy(state)
     lifecycle = result.setdefault("task_lifecycle", {})
     for status in ("NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"):
         lifecycle.setdefault(status, None if status == "NOW" else [])
     result.setdefault("authority_gate", {})
-
     existing_ids = set()
     for status in ("DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"):
         for task in lifecycle.get(status) or []:
@@ -229,18 +253,12 @@ def reconcile_discovered_tasks(state, candidates):
     now_task = lifecycle.get("NOW")
     if isinstance(now_task, dict) and now_task.get("id"):
         existing_ids.add(now_task["id"])
-
     for candidate in candidates or []:
         for task_id in candidate.get("task_ids", []):
             if task_id in existing_ids:
                 continue
-            lifecycle["FUTURE"].append({
-                "id": task_id,
-                "status": "PROPOSED",
-                "source": {"file_id": candidate.get("id"), "file_name": candidate.get("name")},
-            })
+            lifecycle["FUTURE"].append({"id": task_id, "status": "PROPOSED", "source": {"file_id": candidate.get("id"), "file_name": candidate.get("name")}})
             existing_ids.add(task_id)
-
     result["authority_gate"]["pending_approval"] = None
     result["authority_gate"]["last_action"] = "WORKSPACE_DISCOVERY_PROPOSALS"
     return result
@@ -258,9 +276,19 @@ def main():
     if boot_text is None:
         raise RuntimeError("HALT: PROJECT_BOOT.md could not be read from Google Drive")
     publish_boot_to_runtime_env(boot_text)
+
+    authority_info = find_authority_log(token, folder_id)
+    if authority_info:
+        authority_text = read_file_text(token, authority_info)
+        if authority_text is None:
+            raise RuntimeError("HALT: AUTHORITY_LOG.md could not be read from Google Drive")
+        publish_authority_to_runtime_env(authority_text)
+    else:
+        publish_authority_to_runtime_env("")
+
     candidates = discover_task_candidates(token, folder_id)
     print(f"DRIVE_RECONCILIATION_READY candidates={len(candidates)} authority_gate=REQUIRED")
-    print("DRIVE_CANONICAL_STATE_READY source=PROJECT_BOOT.md runtime_state=purely_ephemeral")
+    print("DRIVE_CANONICAL_STATE_READY source=PROJECT_BOOT.md authority_source=AUTHORITY_LOG.md runtime_state=purely_ephemeral")
 
 
 if __name__ == "__main__":
