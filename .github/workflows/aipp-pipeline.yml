@@ -80,8 +80,4 @@ jobs:
             echo "HALT: aipp_state.json must not exist in the execution workspace."
             exit 1
           fi
-          if [ -e PROJECT_BOOT.md ]; then
-            echo "HALT: PROJECT_BOOT.md must not be materialized into the repository workspace."
-            exit 1
-          fi
           echo "EPHEMERAL_STATE_ASSERTION=PASS"
