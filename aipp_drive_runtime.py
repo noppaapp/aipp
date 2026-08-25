@@ -21,7 +21,7 @@ GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 PDF_MIME = "application/pdf"
 ZIP_MIME = "application/zip"
-TEXT_MIME_TYPES = {"text/plain", "text/markdown", "text/csv", "application/json", "application/xml", "application/x-yaml", "text/yaml"}
+TEXT_MIME_TYPES = {"text/plain", "text/markdown", "text/x-markdown", "text/csv", "application/json", "application/xml", "application/x-yaml", "text/yaml"}
 ZIP_TEXT_EXTENSIONS = {".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".xml", ".py", ".js", ".ts", ".toml"}
 TASK_ID_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 
@@ -101,16 +101,7 @@ def find_project_boot(token, folder_id):
     all_files = list_workspace_tree(token, folder_id)
     files = [file_info for file_info in all_files if file_info.get("name") == PROJECT_BOOT]
     if not files:
-        suspects = [
-            {
-                "name": file_info.get("name"),
-                "mimeType": file_info.get("mimeType"),
-                "id": file_info.get("id"),
-                "parents": file_info.get("parents", []),
-            }
-            for file_info in all_files
-            if "project" in file_info.get("name", "").lower() or "boot" in file_info.get("name", "").lower()
-        ]
+        suspects = [{"name": f.get("name"), "mimeType": f.get("mimeType"), "id": f.get("id"), "parents": f.get("parents", [])} for f in all_files if "project" in f.get("name", "").lower() or "boot" in f.get("name", "").lower()]
         print(f"DRIVE_PROJECT_BOOT_MISSING expected={PROJECT_BOOT} suspects={suspects}")
         return None
     if len(files) > 1:
