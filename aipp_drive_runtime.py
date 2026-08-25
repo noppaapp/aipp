@@ -66,18 +66,6 @@ def get_access_token():
     return result["access_token"]
 
 
-def find_project_boot(token, folder_id):
-    import json
-    query = f"name='{PROJECT_BOOT}' and '{folder_id}' in parents and trashed=false"
-    params = urlencode({"q": query, "fields": "files(id,name,mimeType,size,modifiedTime,parents,capabilities(canDownload))", "supportsAllDrives": "true", "includeItemsFromAllDrives": "true"})
-    files = json.loads(_request(f"{DRIVE_API}/files?{params}", token=token)).get("files", [])
-    if not files:
-        return None
-    file_info = files[0]
-    print(f"DRIVE_PROJECT_BOOT_FOUND id={file_info.get('id')} mimeType={file_info.get('mimeType')} modifiedTime={file_info.get('modifiedTime')}")
-    return file_info
-
-
 def list_workspace_children(token, folder_id):
     import json
     query = f"'{folder_id}' in parents and trashed=false"
@@ -106,6 +94,21 @@ def list_workspace_tree(token, root_folder_id):
         pending.extend(child["id"] for child in children if child.get("mimeType") == FOLDER_MIME)
     print(f"DRIVE_TREE_DISCOVERY folders={len(visited)} files={len(discovered)}")
     return discovered
+
+
+def find_project_boot(token, folder_id):
+    import json
+    # PROJECT_BOOT.md is canonical regardless of which nested Workspace folder contains it.
+    # The configured Drive folder is the workspace root, not necessarily the direct parent.
+    files = [file_info for file_info in list_workspace_tree(token, folder_id) if file_info.get("name") == PROJECT_BOOT]
+    if not files:
+        return None
+    if len(files) > 1:
+        ids = ",".join(file_info.get("id", "") for file_info in files)
+        raise RuntimeError(f"HALT: multiple {PROJECT_BOOT} files found in configured Drive workspace: {ids}")
+    file_info = files[0]
+    print(f"DRIVE_PROJECT_BOOT_FOUND id={file_info.get('id')} mimeType={file_info.get('mimeType')} modifiedTime={file_info.get('modifiedTime')}")
+    return file_info
 
 
 def _download_binary(token, file_id):
@@ -163,12 +166,12 @@ def read_file_text(token, file_info):
             return None
     if mime == PDF_MIME:
         try:
-            return _read_pdf(_download_binary(token, file_id))
+            return _read_pdf(_download_binary(token, file_info["id"]))
         except HTTPError:
             return None
     if mime == ZIP_MIME:
         try:
-            return _read_zip(_download_binary(token, file_id))
+            return _read_zip(_download_binary(token, file_info["id"]))
         except HTTPError:
             return None
     return None
