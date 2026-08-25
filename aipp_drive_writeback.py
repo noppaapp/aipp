@@ -90,13 +90,19 @@ def verify_remote_project_boot(token, boot_file_id, task_id):
 
 
 def commit_task_completion(token, boot_file_id, artifact_parent_folder_id, task_id, artifact_path, current_boot_text):
-    """Publish artifacts first, then canonical completion, then read back canonical state."""
+    """Publish artifacts, commit canonical completion, verify remotely, then refresh the ephemeral mirror."""
     updated_boot = mutate_project_boot_task_status(current_boot_text, task_id)
     artifact = upload_artifact(token, artifact_parent_folder_id, artifact_path, task_id)
+    print(f"DRIVE_ARTIFACT_WRITTEN task_id={task_id} artifact_id={artifact.get('id')}")
     try:
         upload_project_boot(token, boot_file_id, updated_boot)
     except Exception as exc:
         raise WriteBackError(f"Artifact published but canonical PROJECT_BOOT write-back failed: {exc}") from exc
     if not verify_remote_project_boot(token, boot_file_id, task_id):
         raise WriteBackError(f"Canonical PROJECT_BOOT read-back verification failed: {task_id}")
+    print(f"PROJECT_BOOT_UPDATED task_id={task_id} status=COMPLETED")
+
+    # Keep only an ephemeral local mirror. The Drive document remains canonical;
+    # this prevents the current process from reloading stale pre-write-back state.
+    Path("PROJECT_BOOT.md").write_text(updated_boot, encoding="utf-8")
     return {"task_id": task_id, "artifact_id": artifact.get("id"), "canonical_status": "COMPLETED"}
