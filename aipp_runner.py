@@ -1,18 +1,18 @@
 import argparse
+import base64
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Keep local AIPP modules importable when invoked by absolute path.
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from aipp_project_bootstrap import bootstrap_project
+from aipp_project_bootstrap import bootstrap_project_from_text
 from aipp_authority import AUTHORITY_LOG, is_approved, proposal_id
 
-PROJECT_BOOT = "PROJECT_BOOT.md"
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
 
@@ -39,10 +39,18 @@ def save_json(path, data):
 
 
 def validate_workspace():
-    required = [AIPP_SPEC, PROJECT_BOOT]
-    missing = [x for x in required if not Path(x).exists()]
-    if missing:
-        raise RuntimeError("HALT: Missing canonical workspace files: " + ", ".join(missing))
+    if not Path(AIPP_SPEC).exists():
+        raise RuntimeError("HALT: Missing AIPP.md protocol specification")
+
+
+def load_canonical_project_boot():
+    encoded = os.environ.get("AIPP_PROJECT_BOOT_B64", "").strip()
+    if not encoded:
+        raise RuntimeError("HALT: Canonical PROJECT_BOOT.md was not supplied by Drive runtime")
+    try:
+        return base64.b64decode(encoded).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise RuntimeError("HALT: Canonical PROJECT_BOOT.md transport is invalid") from exc
 
 
 def default_state():
@@ -59,13 +67,11 @@ def default_state():
 
 
 def load_state():
-    # Runtime state is ephemeral and exists only in process memory.
-    # Canonical project state is bootstrapped from the Drive-provided PROJECT_BOOT.md.
     return default_state()
 
 
 def initialize_state(state, workspace):
-    state = bootstrap_project(workspace, state)
+    state = bootstrap_project_from_text(load_canonical_project_boot(), state)
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
     state["authority_gate"]["last_action"] = "INITIALIZATION"
@@ -80,10 +86,7 @@ def request_approval(state, task_id):
     task = find_future_task(state, task_id)
     if task is None:
         raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
-    state["authority_gate"]["pending_approval"] = {
-        "task_id": task_id,
-        "proposal_id": proposal_id(task),
-    }
+    state["authority_gate"]["pending_approval"] = {"task_id": task_id, "proposal_id": proposal_id(task)}
     state["authority_gate"]["last_action"] = "APPROVAL_REQUESTED"
     state["status"] = "AWAITING_AUTHORITY"
     return state
@@ -160,8 +163,6 @@ def main():
     args = parser.parse_args()
     workspace = Path(args.workspace).resolve()
     workspace.mkdir(parents=True, exist_ok=True)
-    validate_workspace() if workspace == Path.cwd() else None
-    import os
     os.chdir(workspace)
     validate_workspace()
     state = load_state()
@@ -171,6 +172,7 @@ def main():
     elif command == "REQUEST_APPROVAL":
         if not args.task:
             raise RuntimeError("HALT: --task is required.")
+        state = initialize_state(state, ".")
         state = request_approval(state, args.task)
     elif command == "APPROVE":
         if not args.task:
@@ -187,7 +189,6 @@ def main():
     else:
         raise RuntimeError(f"HALT: Unknown command: {args.command}")
     state["last_updated"] = utc_now()
-    # Runtime state is intentionally not persisted to disk or Git.
     print(json.dumps(state, indent=2, ensure_ascii=False))
 
 
