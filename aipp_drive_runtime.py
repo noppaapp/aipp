@@ -237,6 +237,28 @@ def discover_task_candidates(token, folder_id):
     return candidates
 
 
+def reconcile_discovered_tasks(state, candidates):
+    """Convert Drive-discovered task candidates into proposals without approval."""
+    future = state["task_lifecycle"].setdefault("FUTURE", [])
+    existing_ids = {task.get("id") for task in future}
+    for candidate in candidates or []:
+        for task_id in candidate.get("task_ids", []):
+            if task_id in existing_ids:
+                continue
+            future.append({
+                "id": task_id,
+                "title": candidate.get("name", task_id),
+                "status": "PROPOSED",
+                "source_file_id": candidate.get("id"),
+                "source_file_name": candidate.get("name"),
+                "source_mime_type": candidate.get("mimeType"),
+                "source_parents": candidate.get("parents", []),
+            })
+            existing_ids.add(task_id)
+    state["authority_gate"]["last_action"] = "WORKSPACE_DISCOVERY_PROPOSALS"
+    return state
+
+
 def main():
     token = get_access_token()
     folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
