@@ -1,12 +1,10 @@
 import argparse
 import json
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Keep local AIPP modules importable when the runner is invoked by absolute path
-# from an isolated workspace, as in the project bootstrap E2E test.
+# Keep local AIPP modules importable when invoked by absolute path.
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
@@ -36,7 +34,7 @@ def save_json(path, data):
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
-    os.replace(tmp, path)
+    tmp.replace(path)
 
 
 def validate_workspace():
@@ -55,20 +53,19 @@ def default_state():
         "task_lifecycle": {"NOW": None, "DEFERRED": [], "BLOCKED": [], "FUTURE": [], "REFERENCE": [], "COMPLETED": []},
         "authority_gate": {"pending_approval": None, "last_action": "INITIALIZATION"},
         "step": 0,
-        "runner_engine": "GitHub Actions Autonomous Cloud Runner"
+        "runner_engine": "GitHub Actions Autonomous Cloud Runner",
     }
 
 
 def load_state():
     # Runtime state is ephemeral and exists only in process memory.
-    # Canonical project state is bootstrapped from PROJECT_BOOT.md.
+    # Canonical project state is bootstrapped from the Drive-provided PROJECT_BOOT.md.
     return default_state()
 
 
 def initialize_state(state, workspace):
     state = bootstrap_project(workspace, state)
-    if state["status"] == "PROJECT_READY":
-        state["status"] = "PROPOSAL_READY"
+    state["status"] = "PROPOSAL_READY"
     state["step"] = 1
     state["authority_gate"]["last_action"] = "INITIALIZATION"
     return state
@@ -149,28 +146,28 @@ def main():
     parser.add_argument("--workspace", default=".")
     parser.add_argument("--task")
     args = parser.parse_args()
-    os.chdir(args.workspace)
+    workspace = Path(args.workspace).resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    validate_workspace() if workspace == Path.cwd() else None
+    import os
+    os.chdir(workspace)
     validate_workspace()
     state = load_state()
     command = args.command.upper()
     if command == "BAŞLA":
         state = initialize_state(state, ".")
     elif command == "REQUEST_APPROVAL":
-        if not args.task: raise RuntimeError("HALT: --task is required.")
+        if not args.task:
+            raise RuntimeError("HALT: --task is required.")
         state = request_approval(state, args.task)
     elif command == "APPROVE":
-        if not args.task: raise RuntimeError("HALT: --task is required.")
-        state = approve_task(state, args.task)
+        raise RuntimeError("HALT: APPROVE requires a canonical Authority Gate transition; runtime memory cannot carry approval across sessions.")
     elif command == "EXECUTE":
         state = execute_task(state, ".")
     elif command == "VERIFY":
         state = verify_task(state, ".")
     elif command == "RUN":
-        if not args.task: raise RuntimeError("HALT: --task is required.")
-        state = request_approval(state, args.task)
-        state = approve_task(state, args.task)
-        state = execute_task(state, ".")
-        state = verify_task(state, ".")
+        raise RuntimeError("HALT: RUN cannot autonomously approve a task. Use canonical Authority Gate approval before EXECUTE.")
     else:
         raise RuntimeError(f"HALT: Unknown command: {args.command}")
     state["last_updated"] = utc_now()
