@@ -80,23 +80,19 @@ def load_discovered_candidates():
 
 
 def reconcile_discovered_tasks(state):
-    """Merge Drive discovery into the ephemeral FUTURE queue only."""
-    lifecycle = state.setdefault("task_lifecycle", {})
-    lifecycle.setdefault("FUTURE", [])
-    existing = {task.get("id") for task in lifecycle["FUTURE"] if isinstance(task, dict)}
+    """Keep Drive discovery separate from canonical lifecycle state."""
+    discovered = []
     for candidate in load_discovered_candidates():
-        for task_id in candidate.get("task_ids", []):
-            if task_id in existing:
-                continue
-            lifecycle["FUTURE"].append({
-                "id": task_id,
-                "title": f"Drive-discovered task {task_id}",
-                "status": "PROPOSED",
-                "dependency_reason": "Discovered in canonical Drive workspace",
-                "source": {"file_id": candidate.get("id"), "file_name": candidate.get("name")},
-            })
-            existing.add(task_id)
-    state.setdefault("authority_gate", {})["last_action"] = "WORKSPACE_DISCOVERY_PROPOSALS"
+        if not isinstance(candidate, dict):
+            continue
+        discovered.append({
+            "id": candidate.get("id"),
+            "name": candidate.get("name"),
+            "task_ids": list(candidate.get("task_ids", [])),
+            "parents": list(candidate.get("parents", [])),
+        })
+    state["discovered_candidates"] = discovered
+    state.setdefault("authority_gate", {})["last_action"] = "WORKSPACE_DISCOVERY_RECORDED"
     return state
 
 
@@ -110,7 +106,7 @@ def _dependency_is_satisfied(task, completed_ids):
 
 
 def select_next_action(state):
-    """Select the next eligible task without changing lifecycle state or crossing authority."""
+    """Select the next eligible canonical task without changing lifecycle state or crossing authority."""
     lifecycle = state.get("task_lifecycle", {})
     completed = lifecycle.get("COMPLETED", []) or []
     completed_ids = {task.get("id") for task in completed if isinstance(task, dict)}
