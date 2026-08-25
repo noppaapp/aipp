@@ -19,6 +19,10 @@ on:
       - "PROJECT_BOOT.md"
       - ".github/workflows/aipp-pipeline.yml"
 
+concurrency:
+  group: aipp-autonomous-pipeline
+  cancel-in-progress: false
+
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
@@ -32,7 +36,7 @@ jobs:
         run: |
           echo "CHECKED_OUT_COMMIT=$(git rev-parse HEAD)"
           echo "RUNTIME_SHA=$(git hash-object aipp_drive_runtime.py)"
-          grep -n "DRIVE download\\|DRIVE_FILE_FOUND\\|PDF_MIME\\|ZIP_MIME" aipp_drive_runtime.py
+          grep -n "DRIVE_PROJECT_BOOT_FOUND\\|DRIVE_CANONICAL_STATE_MATERIALIZED\\|DRIVE_CANONICAL_STATE_READY" aipp_drive_runtime.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -72,9 +76,10 @@ jobs:
             python aipp_runner.py "$command" --workspace "."
           fi
 
-      - name: Runtime state is ephemeral
+      - name: Assert runtime state is ephemeral
         run: |
-          echo "AIPP runtime state is not committed to Git."
-          if [ -f aipp_state.json ]; then
-            echo "Runtime state exists only inside this execution environment."
+          if [ -e aipp_state.json ]; then
+            echo "HALT: aipp_state.json must not exist in the execution workspace."
+            exit 1
           fi
+          echo "EPHEMERAL_STATE_ASSERTION=PASS"
