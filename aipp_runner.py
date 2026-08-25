@@ -11,7 +11,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from aipp_project_bootstrap import bootstrap_project_from_text
-from aipp_authority import AUTHORITY_LOG, is_approved, proposal_id
+from aipp_authority import AUTHORITY_LOG, AUTHORITY_ENV, is_approved, proposal_id
 
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
@@ -45,21 +45,25 @@ def validate_workspace():
 
 def load_canonical_project_boot(workspace="."):
     boot_path = Path(workspace) / "PROJECT_BOOT.md"
-
-    # A locally supplied PROJECT_BOOT.md is the explicit workspace input for
-    # isolated runner/tests. In GitHub Actions the file is intentionally absent,
-    # so the Drive runtime transport below becomes the canonical input.
     if boot_path.exists():
         return boot_path.read_text(encoding="utf-8")
-
     encoded = os.environ.get("AIPP_PROJECT_BOOT_B64", "").strip()
     if encoded:
         try:
             return base64.b64decode(encoded).decode("utf-8")
         except (ValueError, UnicodeDecodeError) as exc:
             raise RuntimeError("HALT: Canonical PROJECT_BOOT.md transport is invalid") from exc
-
     raise RuntimeError("HALT: Canonical PROJECT_BOOT.md was not supplied by Drive runtime")
+
+
+def load_canonical_authority_log():
+    encoded = os.environ.get(AUTHORITY_ENV, "").strip()
+    if not encoded:
+        return ""
+    try:
+        return base64.b64decode(encoded).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise RuntimeError("HALT: Canonical AUTHORITY_LOG.md transport is invalid") from exc
 
 
 def default_state():
@@ -102,7 +106,7 @@ def request_approval(state, task_id):
     return state
 
 
-def approve_task(state, task_id, authority_log=AUTHORITY_LOG):
+def approve_task(state, task_id, authority_log=None):
     pending = state["authority_gate"].get("pending_approval")
     if pending != task_id:
         raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
@@ -113,7 +117,8 @@ def approve_task(state, task_id, authority_log=AUTHORITY_LOG):
     actual_proposal = proposal_id(task)
     if expected_proposal != actual_proposal:
         raise RuntimeError("HALT: Proposal changed after approval request")
-    if not is_approved(authority_log, task):
+    source = load_canonical_authority_log() if authority_log is None else authority_log
+    if not is_approved(source, task):
         raise RuntimeError(f"HALT: Canonical Authority Gate approval not found: {actual_proposal}")
     state["task_lifecycle"]["FUTURE"].remove(task)
     task["status"] = "APPROVED"
