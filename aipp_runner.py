@@ -66,6 +66,47 @@ def load_canonical_authority_log():
         raise RuntimeError("HALT: Canonical AUTHORITY_LOG.md transport is invalid") from exc
 
 
+def load_discovered_candidates():
+    encoded = os.environ.get("AIPP_TASK_CANDIDATES_B64", "").strip()
+    if not encoded:
+        return []
+    try:
+        value = json.loads(base64.b64decode(encoded).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("HALT: Canonical Drive task discovery transport is invalid") from exc
+    if not isinstance(value, list):
+        raise RuntimeError("HALT: Canonical Drive task discovery payload is not a list")
+    return value
+
+
+def reconcile_discovered_tasks(state):
+    """Merge Drive-discovered task IDs into the ephemeral FUTURE queue.
+
+    Discovery is advisory only. It never approves a task and never moves a task
+    beyond FUTURE. Approval still requires the canonical Authority Log.
+    """
+    lifecycle = state.setdefault("task_lifecycle", {})
+    lifecycle.setdefault("FUTURE", [])
+    existing = {task.get("id") for task in lifecycle["FUTURE"] if isinstance(task, dict)}
+    for candidate in load_discovered_candidates():
+        for task_id in candidate.get("task_ids", []):
+            if task_id in existing:
+                continue
+            lifecycle["FUTURE"].append({
+                "id": task_id,
+                "title": f"Drive-discovered task {task_id}",
+                "status": "PROPOSED",
+                "dependency_reason": "Discovered in canonical Drive workspace",
+                "source": {
+                    "file_id": candidate.get("id"),
+                    "file_name": candidate.get("name"),
+                },
+            })
+            existing.add(task_id)
+    state.setdefault("authority_gate", {})["last_action"] = "WORKSPACE_DISCOVERY_PROPOSALS"
+    return state
+
+
 def default_state():
     return {
         "version": "1.1.1",
@@ -85,6 +126,7 @@ def load_state():
 
 def initialize_state(state, workspace):
     state = bootstrap_project_from_text(load_canonical_project_boot(workspace), state)
+    state = reconcile_discovered_tasks(state)
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
     state["authority_gate"]["last_action"] = "INITIALIZATION"
@@ -107,12 +149,6 @@ def request_approval(state, task_id):
 
 
 def approve_task(state, task_id, authority_log=None):
-    """Apply a canonical Drive approval using only the current session's boot state.
-
-    A previous runtime session is not required. The task and its deterministic
-    proposal identity are reconstructed from the current PROJECT_BOOT.md, then
-    matched against the canonical AUTHORITY_LOG.md supplied by the Drive runtime.
-    """
     task = find_future_task(state, task_id)
     if task is None:
         raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
@@ -120,10 +156,6 @@ def approve_task(state, task_id, authority_log=None):
     actual_proposal = proposal_id(task)
     pending = state["authority_gate"].get("pending_approval")
     pending_proposal = state["authority_gate"].get("pending_proposal_id")
-
-    # If this process previously requested approval, verify that ephemeral
-    # request context has not changed. A fresh process may legitimately have
-    # no pending request because runtime memory is intentionally discarded.
     if pending is not None and pending != task_id:
         raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
     if pending_proposal is not None and pending_proposal != actual_proposal:
