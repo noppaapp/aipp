@@ -3,6 +3,7 @@ import os
 import re
 import zipfile
 import base64
+import copy
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -212,6 +213,39 @@ def discover_task_candidates(token, folder_id):
     return candidates
 
 
+def reconcile_discovered_tasks(state, candidates):
+    """Map discovered task IDs into FUTURE proposals without crossing Authority Gate."""
+    result = copy.deepcopy(state)
+    lifecycle = result.setdefault("task_lifecycle", {})
+    for status in ("NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"):
+        lifecycle.setdefault(status, None if status == "NOW" else [])
+    result.setdefault("authority_gate", {})
+
+    existing_ids = set()
+    for status in ("DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"):
+        for task in lifecycle.get(status) or []:
+            if isinstance(task, dict) and task.get("id"):
+                existing_ids.add(task["id"])
+    now_task = lifecycle.get("NOW")
+    if isinstance(now_task, dict) and now_task.get("id"):
+        existing_ids.add(now_task["id"])
+
+    for candidate in candidates or []:
+        for task_id in candidate.get("task_ids", []):
+            if task_id in existing_ids:
+                continue
+            lifecycle["FUTURE"].append({
+                "id": task_id,
+                "status": "PROPOSED",
+                "source": {"file_id": candidate.get("id"), "file_name": candidate.get("name")},
+            })
+            existing_ids.add(task_id)
+
+    result["authority_gate"]["pending_approval"] = None
+    result["authority_gate"]["last_action"] = "WORKSPACE_DISCOVERY_PROPOSALS"
+    return result
+
+
 def main():
     token = get_access_token()
     folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
@@ -224,7 +258,8 @@ def main():
     if boot_text is None:
         raise RuntimeError("HALT: PROJECT_BOOT.md could not be read from Google Drive")
     publish_boot_to_runtime_env(boot_text)
-    discover_task_candidates(token, folder_id)
+    candidates = discover_task_candidates(token, folder_id)
+    print(f"DRIVE_RECONCILIATION_READY candidates={len(candidates)} authority_gate=REQUIRED")
     print("DRIVE_CANONICAL_STATE_READY source=PROJECT_BOOT.md runtime_state=purely_ephemeral")
 
 
