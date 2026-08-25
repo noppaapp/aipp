@@ -1,67 +1,61 @@
 import json
 import subprocess
 import sys
-from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = __import__("pathlib").Path(__file__).resolve().parents[2]
 RUNNER = ROOT / "aipp_runner.py"
 
 
-def run(command, workspace, task=None):
+def run(command, workspace, task=None, check=True):
     args = [sys.executable, str(RUNNER), command, "--workspace", str(workspace)]
     if task:
         args += ["--task", task]
-    return subprocess.run(args, cwd=workspace, text=True, capture_output=True, check=True)
+    return subprocess.run(args, cwd=workspace, text=True, capture_output=True, check=check)
 
 
-def test_session_continuation_survives_process_restart(tmp_path):
-    """AIPP must resume from persisted canonical state after the first process ends."""
-    (tmp_path / "AIPP.md").write_text("# AIPP\n", encoding="utf-8")
-    (tmp_path / "PROJECT_BOOT.md").write_text("# BOOT\n", encoding="utf-8")
+def write_boot(path):
+    (path / "AIPP.md").write_text("# AIPP\n", encoding="utf-8")
+    (path / "PROJECT_BOOT.md").write_text(
+        "# PROJECT_BOOT: AIPP\n\n"
+        "**Workspace Status:** ACTIVE\n"
+        "**Active State:** [READY]\n\n"
+        "| Task ID | Task Description | Status | Dependency / Reason |\n"
+        "| :--- | :--- | :--- | :--- |\n"
+        "| **SESSION-001** | `Cross-session continuation proof` | `FUTURE` | - |\n",
+        encoding="utf-8",
+    )
 
-    state = {
-        "version": "1.1.1",
-        "status": "PROPOSAL_READY",
-        "active_project": "AIPP",
-        "execution_mode": "REAL",
-        "task_lifecycle": {
-            "NOW": None,
-            "DEFERRED": [],
-            "BLOCKED": [],
-            "FUTURE": [{
-                "id": "SESSION-001",
-                "title": "Cross-session continuation proof",
-                "status": "FUTURE"
-            }],
-            "REFERENCE": [],
-            "COMPLETED": []
-        },
-        "authority_gate": {"pending_approval": None, "last_action": "INITIALIZATION"},
-        "step": 1,
-        "runner_engine": "Session Continuation Test"
-    }
-    state_path = tmp_path / "aipp_state.json"
-    state_path.write_text(json.dumps(state), encoding="utf-8")
 
-    # Session 1: request approval, then terminate the process completely.
-    run("REQUEST_APPROVAL", tmp_path, "SESSION-001")
-    persisted = json.loads(state_path.read_text(encoding="utf-8"))
-    assert persisted["status"] == "AWAITING_AUTHORITY"
-    assert persisted["authority_gate"]["pending_approval"] == "SESSION-001"
+def test_session_restart_does_not_restore_ephemeral_authority_state(tmp_path):
+    """A fresh process must not recover approval from discarded runtime memory."""
+    write_boot(tmp_path)
 
-    # Session 2: a fresh process reloads the persisted state and continues.
-    run("APPROVE", tmp_path, "SESSION-001")
-    run("EXECUTE", tmp_path)
-    run("VERIFY", tmp_path)
+    first = run("REQUEST_APPROVAL", tmp_path, "SESSION-001")
+    first_state = json.loads(first.stdout)
+    assert first_state["status"] == "AWAITING_AUTHORITY"
+    assert first_state["authority_gate"]["pending_approval"] == "SESSION-001"
+    assert not (tmp_path / "aipp_state.json").exists()
 
-    final_state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert final_state["status"] == "COMPLETED"
-    assert final_state["task_lifecycle"]["NOW"] is None
-    assert final_state["task_lifecycle"]["COMPLETED"][0]["id"] == "SESSION-001"
-    assert final_state["authority_gate"]["last_action"] == "VERIFIED"
+    second = run("APPROVE", tmp_path, "SESSION-001", check=False)
+    assert second.returncode != 0
+    assert "canonical Authority Gate transition" in second.stderr
+    assert not (tmp_path / "aipp_state.json").exists()
 
-    artifact = tmp_path / final_state["task_lifecycle"]["COMPLETED"][0]["artifact"]
-    assert artifact.exists()
 
-    print("SESSION_CONTINUATION_PROOF: session-1 persisted state; session-2 resumed and verified")
+def test_session_restart_reloads_canonical_project_boot(tmp_path):
+    """A new process can re-bootstrap from the canonical PROJECT_BOOT.md source."""
+    write_boot(tmp_path)
+
+    first = run("BAŞLA", tmp_path)
+    first_state = json.loads(first.stdout)
+    assert first_state["active_project"] == "AIPP"
+    assert first_state["task_lifecycle"]["FUTURE"][0]["id"] == "SESSION-001"
+
+    second = run("BAŞLA", tmp_path)
+    second_state = json.loads(second.stdout)
+    assert second_state["active_project"] == "AIPP"
+    assert second_state["task_lifecycle"]["FUTURE"][0]["id"] == "SESSION-001"
+    assert not (tmp_path / "aipp_state.json").exists()
+
+    print("SESSION_CONTINUATION_PROOF: canonical PROJECT_BOOT reloaded; ephemeral authority state was not restored")
