@@ -48,18 +48,20 @@ def bootstrap_project_from_text(text, state):
         "source": "PROJECT_BOOT.md",
     }
     lifecycle = state.setdefault("task_lifecycle", {})
-    for status in LIFECYCLE_STATUSES:
+    # NOW is semantically a single slot; the other lifecycle buckets are lists.
+    if not isinstance(lifecycle.get("NOW"), (dict, type(None))):
+        lifecycle["NOW"] = None
+    for status in LIFECYCLE_STATUSES - {"NOW"}:
         value = lifecycle.get(status)
         lifecycle[status] = value if isinstance(value, list) else []
-    existing = {status: {task.get("id") for task in lifecycle[status]} for status in LIFECYCLE_STATUSES}
+    existing = {status: {task.get("id") for task in lifecycle[status]} for status in LIFECYCLE_STATUSES - {"NOW"}}
     # PROJECT_BOOT is the canonical source for bootstrap mapping. Do not
     # merge unrelated discovery candidates into its lifecycle state.
     for task in boot["tasks"]:
         task_id, status = task["id"], task["status"]
-        for other_status in LIFECYCLE_STATUSES:
-            if other_status != status:
-                lifecycle[other_status] = [item for item in lifecycle[other_status] if item.get("id") != task_id]
-                existing[other_status].discard(task_id)
+        for other_status in LIFECYCLE_STATUSES - {"NOW", status}:
+            lifecycle[other_status] = [item for item in lifecycle[other_status] if item.get("id") != task_id]
+            existing[other_status].discard(task_id)
         if status == "NOW":
             lifecycle["NOW"] = task
         elif task_id not in existing[status]:
