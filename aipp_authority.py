@@ -11,15 +11,12 @@ PROPOSAL_PREFIX = "PROP"
 
 def _canonical_payload(task):
     """Return only proposal-defining fields in deterministic form."""
-    fields = {
+    return {
         "id": task.get("id"),
         "title": task.get("title"),
-        "description": task.get("description"),
-        "dependency": task.get("dependency"),
-        "reason": task.get("reason"),
         "status": task.get("status"),
+        "dependency_reason": task.get("dependency_reason"),
     }
-    return fields
 
 
 def proposal_id(task):
@@ -27,8 +24,12 @@ def proposal_id(task):
     task_id = task.get("id")
     if not task_id:
         raise ValueError("Proposal requires a task id")
-    payload = _canonical_payload(task)
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    encoded = json.dumps(
+        _canonical_payload(task),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
     digest = hashlib.sha256(encoded).hexdigest()[:12].upper()
     safe_task = re.sub(r"[^A-Z0-9]+", "-", str(task_id).upper()).strip("-")
     return f"{PROPOSAL_PREFIX}-{safe_task}-{digest}"
