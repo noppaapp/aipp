@@ -184,7 +184,7 @@ def approve_task(state, task_id, authority_log=None):
         raise RuntimeError("HALT: Proposal changed after approval request")
     source = load_canonical_authority_log() if authority_log is None else authority_log
     if not is_approved(source, task):
-        raise RuntimeError(f"HALT: canonical Authority Gate transition missing approval: {actual_proposal}")
+        raise RuntimeError(f"HALT: cannot autonomously approve task {task_id}; canonical Authority Gate transition missing approval: {actual_proposal}")
     state["task_lifecycle"]["FUTURE"].remove(task)
     task["status"] = "APPROVED"
     task["proposal_id"] = actual_proposal
