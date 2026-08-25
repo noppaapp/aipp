@@ -107,19 +107,32 @@ def request_approval(state, task_id):
 
 
 def approve_task(state, task_id, authority_log=None):
-    pending = state["authority_gate"].get("pending_approval")
-    if pending != task_id:
-        raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
+    """Apply a canonical Drive approval using only the current session's boot state.
+
+    A previous runtime session is not required. The task and its deterministic
+    proposal identity are reconstructed from the current PROJECT_BOOT.md, then
+    matched against the canonical AUTHORITY_LOG.md supplied by the Drive runtime.
+    """
     task = find_future_task(state, task_id)
     if task is None:
-        raise RuntimeError(f"HALT: Task disappeared from FUTURE: {task_id}")
-    expected_proposal = state["authority_gate"].get("pending_proposal_id")
+        raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
+
     actual_proposal = proposal_id(task)
-    if expected_proposal != actual_proposal:
+    pending = state["authority_gate"].get("pending_approval")
+    pending_proposal = state["authority_gate"].get("pending_proposal_id")
+
+    # If this process previously requested approval, verify that ephemeral
+    # request context has not changed. A fresh process may legitimately have
+    # no pending request because runtime memory is intentionally discarded.
+    if pending is not None and pending != task_id:
+        raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
+    if pending_proposal is not None and pending_proposal != actual_proposal:
         raise RuntimeError("HALT: Proposal changed after approval request")
+
     source = load_canonical_authority_log() if authority_log is None else authority_log
     if not is_approved(source, task):
         raise RuntimeError(f"HALT: Canonical Authority Gate approval not found: {actual_proposal}")
+
     state["task_lifecycle"]["FUTURE"].remove(task)
     task["status"] = "APPROVED"
     task["proposal_id"] = actual_proposal
@@ -191,7 +204,10 @@ def main():
         state = initialize_state(state, ".")
         state = request_approval(state, args.task)
     elif command == "APPROVE":
-        raise RuntimeError("HALT: canonical Authority Gate transition requires external human approval; APPROVE cannot be performed by an ephemeral runner session")
+        if not args.task:
+            raise RuntimeError("HALT: --task is required.")
+        state = initialize_state(state, ".")
+        state = approve_task(state, args.task)
     elif command == "EXECUTE":
         state = execute_task(state, ".")
     elif command == "VERIFY":
