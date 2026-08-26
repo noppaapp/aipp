@@ -21,6 +21,7 @@ on:
       - "tests/**"
       - "panel/**"
       - "AIPP.md"
+      - "AIPP_FINAL_READINESS.md"
       - ".github/workflows/aipp-pipeline.yml"
 
 # Serialize repeated executions of the same revision, while preventing a stale
