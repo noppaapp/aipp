@@ -18,6 +18,7 @@ on:
       - "aipp_drive_runtime.py"
       - "aipp_project_bootstrap.py"
       - "aipp_authority.py"
+      - "panel/**"
       - "tests/**"
       - "AIPP.md"
       - ".github/workflows/aipp-pipeline.yml"
