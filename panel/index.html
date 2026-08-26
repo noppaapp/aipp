@@ -1,18 +1,14 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AIPP Control Panel</title>
-<style>
-:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color-scheme:dark}body{margin:0;background:#0d1117;color:#e6edf3}main{max-width:1100px;margin:0 auto;padding:32px 20px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px}.muted{color:#8b949e}.ok{color:#3fb950}.pill{display:inline-block;padding:4px 9px;border:1px solid #30363d;border-radius:999px}.wide{grid-column:1/-1}pre{white-space:pre-wrap;overflow:auto}h1{margin:0 0 4px}.state{font-size:28px;font-weight:700}
-</style>
-</head>
-<body><main>
-<h1>AIPP Control Panel</h1><div class="muted">v1.1.1 · operator surface</div>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AIPP Control Panel</title>
+<style>:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color-scheme:dark}body{margin:0;background:#0d1117;color:#e6edf3}main{max-width:1100px;margin:0 auto;padding:32px 20px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px}.muted{color:#8b949e}.ok{color:#3fb950}.pill{display:inline-block;padding:4px 9px;border:1px solid #30363d;border-radius:999px}.wide{grid-column:1/-1}pre{white-space:pre-wrap;overflow:auto}button{padding:10px 14px;margin:4px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#e6edf3;cursor:pointer}button:hover{background:#30363d}.state{font-size:28px;font-weight:700}</style></head>
+<body><main><h1>AIPP Control Panel</h1><div class="muted">v1.1.1 · operator surface</div>
 <div class="grid" style="margin-top:24px">
 <section class="card"><div class="muted">SYSTEM</div><div class="state"><span class="ok">●</span> READY</div><p class="muted">Runtime state is owned by AIPP Core.</p></section>
 <section class="card"><div class="muted">EXECUTION</div><p>GitHub <span class="pill">runtime</span></p><p>Drive <span class="pill">runtime</span></p><p>AI <span class="pill">optional</span></p></section>
-<section class="card"><div class="muted">CURRENT TASK</div><pre id="task">Awaiting AIPP state...</pre></section>
-<section class="card wide"><div class="muted">EXECUTION PIPELINE</div><pre>DEFINE → GENERATE → VERIFY → CLOSE</pre></section>
+<section class="card"><div class="muted">CONTROL</div><button onclick="run('BAŞLA')">BAŞLA</button><button onclick="run('EXECUTE')">EXECUTE</button><button onclick="run('VERIFY')">VERIFY</button><p class="muted">APPROVE is intentionally unavailable here. Authority remains external/canonical.</p></section>
+<section class="card wide"><div class="muted">OUTPUT</div><pre id="output">Ready.</pre></section>
 <section class="card wide"><div class="muted">CONTROL BOUNDARY</div><pre>Panel → AIPP Core → Execution → GitHub / Drive / optional AI</pre></section>
-</div></main></body></html>
+</div></main>
+<script>async function run(command){const out=document.getElementById('output');out.textContent=command+' running…';try{const r=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command})});out.textContent=await r.text()}catch(e){out.textContent='Panel connection error: '+e}}</script>
+</body></html>
