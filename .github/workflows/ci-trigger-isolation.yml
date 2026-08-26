@@ -12,5 +12,3 @@ jobs:
           echo "TRIGGER_PROOF=PASS"
           echo "SHA=${GITHUB_SHA}"
           echo "REF=${GITHUB_REF}"
-
-test: human push trigger proof
