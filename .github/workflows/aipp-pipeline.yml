@@ -13,16 +13,6 @@ on:
         required: false
         default: ""
   push:
-    paths:
-      - "aipp_runner.py"
-      - "aipp_drive_runtime.py"
-      - "aipp_project_bootstrap.py"
-      - "aipp_authority.py"
-      - "tests/**"
-      - "panel/**"
-      - "AIPP.md"
-      - "AIPP_FINAL_READINESS.md"
-      - ".github/workflows/aipp-pipeline.yml"
 
 # Serialize repeated executions of the same revision, while preventing a stale
 # queued run from blocking verification of a newer commit.
