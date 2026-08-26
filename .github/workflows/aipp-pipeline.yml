@@ -18,13 +18,15 @@ on:
       - "aipp_drive_runtime.py"
       - "aipp_project_bootstrap.py"
       - "aipp_authority.py"
-      - "panel/**"
       - "tests/**"
+      - "panel/**"
       - "AIPP.md"
       - ".github/workflows/aipp-pipeline.yml"
 
+# Serialize repeated executions of the same revision, while preventing a stale
+# queued run from blocking verification of a newer commit.
 concurrency:
-  group: aipp-autonomous-pipeline
+  group: aipp-autonomous-pipeline-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
