@@ -31,4 +31,5 @@ Control Panel
               +--> optional AI
 ```
 
+
 AI is an optional capability provider, not a required runtime authority. The core protocol remains deterministic without an AI model.
