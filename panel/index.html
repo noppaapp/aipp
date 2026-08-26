@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AIPP Control Panel</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:980px;margin:40px auto;padding:0 20px;background:#0f1115;color:#eee}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}.card{border:1px solid #30343d;border-radius:12px;padding:18px;background:#171a20}.muted{color:#9aa1ad}.ok{color:#7ee787}h1{margin-bottom:4px}pre{white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <h1>AIPP Control Panel</h1><div class="muted">v1.1.1 · operator surface</div>
+  <div class="grid" style="margin-top:24px">
+    <section class="card"><h2>System</h2><div class="ok">● READY</div><p class="muted">State is owned by AIPP Core.</p></section>
+    <section class="card"><h2>Execution</h2><p>GitHub: <span class="ok">runtime</span></p><p>Drive: <span class="ok">runtime</span></p><p>AI: optional</p></section>
+    <section class="card"><h2>Current task</h2><pre id="task">Awaiting AIPP state...</pre></section>
+    <section class="card"><h2>Boundary</h2><p>Panel → AIPP Core → Execution → GitHub / Drive / optional AI</p></section>
+  </div>
+</body>
+</html>
