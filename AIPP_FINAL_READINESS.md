@@ -30,7 +30,5 @@ Control Panel
               +--> Drive
               +--> optional AI
 ```
-test: verify final readiness trigger
-
 
 AI is an optional capability provider, not a required runtime authority. The core protocol remains deterministic without an AI model.
