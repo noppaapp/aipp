@@ -1,16 +1,16 @@
 # AIPP Current Status Report
 
-**Date:** 2026-08-26
-**Repository:** `noppaapp/aipp`
-**Branch:** `main`
-**Verified HEAD:** `fea2660d553edb2cbb34b728b50822ec0250da16`
-**Purpose:** Current factual checkpoint after Noppa-specific state cleanup and successful final pipeline verification.
+**Date:** 2026-08-26  
+**Repository:** `noppaapp/aipp`  
+**Branch:** `main`  
+**Verified HEAD:** `8b8d57b968d47144b6b421738d9adbd1cd55066e`  
+**Purpose:** Current factual checkpoint after Noppa-specific state cleanup, final documentation cleanup, and successful final pipeline verification.
 
 ## 1. Executive Status
 
 **AIPP has passed the current final readiness gate.**
 
-The latest `main` commit was manually executed through the canonical AIPP Autonomous Pipeline and completed with `SUCCESS`.
+The latest `main` commit was manually executed through the canonical AIPP Autonomous Pipeline and completed with `SUCCESS`. The same commit also passed the push-triggered pipeline.
 
 ## 2. Verified Architecture
 
@@ -32,15 +32,28 @@ Responsibilities:
 - `workspace_state.json` containing Noppa-specific project state was removed.
 - Noppa-specific examples were removed from `AIPP.md` and `docs/CLOUD_INTEGRATION.md`.
 - `PROJECT_BOOT.md` remains the generic AIPP reference bootstrap.
+- Canonical version references are aligned to AIPP v1.1.1 Final / Operations Extension.
 - The runtime does not persist `aipp_state.json` as canonical state.
 
-## 4. Verified Pipeline
+## 4. Verified Drive Runtime
 
-Latest verified run:
+The final pipeline successfully verified the live Drive runtime path:
+
+- Drive tree discovery: `folders=4 files=25`.
+- Canonical `PROJECT_BOOT.md` was found and read successfully.
+- Canonical state was transported through `GITHUB_ENV` with ephemeral storage semantics.
+- `AUTHORITY_LOG.md` was not present; the runtime correctly kept the authority gate required and did not infer approval.
+- One task candidate was discovered and marked as requiring the Authority Gate.
+- Runtime state remained purely ephemeral.
+
+## 5. Verified Pipeline
+
+Latest verified runs on `main`:
 
 - **Workflow:** AIPP Autonomous Pipeline
-- **Run:** `32995386274`
-- **Commit:** `fea2660d553edb2cbb34b728b50822ec0250da16`
+- **Latest manual run:** `32996071089` (#145)
+- **Latest push run:** `32995972879` (#144)
+- **Commit:** `8b8d57b968d47144b6b421738d9adbd1cd55066e`
 - **Branch:** `main`
 - **Result:** **SUCCESS**
 
@@ -52,19 +65,19 @@ Verified behavior includes:
 - Full pytest suite: **21 passed**.
 - E2E session continuation: **2 passed**.
 - AIPP execution.
-- Ephemeral runtime-state assertion: **PASS**.
 - Runtime `active_project`: **AIPP Reference Implementation (Generic)**.
+- Ephemeral runtime-state assertion: **PASS**.
 - `aipp_state.json`: **not present** after execution.
 
-## 5. Authority Gate
+## 6. Authority Gate
 
 The runtime remains deterministic and does not autonomously approve work. Runtime state is ephemeral, while canonical approval continuity remains external to the runner.
 
-## 6. Concurrency
+## 7. Concurrency
 
 GitHub Actions workflow-level concurrency remains enabled with `cancel-in-progress: false`.
 
-## 7. Final Verdict
+## 8. Final Verdict
 
 ### Architecture
 **APPROVED / coherent**
@@ -93,8 +106,8 @@ GitHub Actions workflow-level concurrency remains enabled with `cancel-in-progre
 ### Release/final readiness
 **PASS / READY**
 
-This status report supersedes the previous regression checkpoint for the verified state at `fea2660d`.
+This status report supersedes the previous regression checkpoint and records the verified state at `8b8d57b968d47144b6b421738d9adbd1cd55066e`.
 
-## 8. Golden Rule
+## 9. Golden Rule
 
 Preserve the architecture. Restore behavior through the smallest necessary change. Do not reintroduce Git-persisted runtime state.

@@ -1,19 +1,19 @@
 # PROJECT_BOOT: AIPP Reference Implementation (Generic)
 
 **STATUS:** FROZEN  
-**CANONICAL AIPP VERSION:** v1.1  
-**LAST UPDATE:** 2026-08-10  
+**CANONICAL AIPP VERSION:** v1.1.1  
+**LAST UPDATE:** 2026-08-26  
 
 ---
 
 ## 1. CURRENT SYSTEM STATE
-* **Workspace Status:** ACTIVE (GitHub Codespaces)
-* **Governance Protocol:** AIPP v1.1 Operations Extension Enforced
+* **Workspace Status:** ACTIVE (GitHub Actions)
+* **Governance Protocol:** AIPP v1.1.1 Final / Operations Extension Enforced
 * **Active State:** [STAGE_FINAL: DECOUPLED_GENERIC_PROTOCOL]
 
 ---
 
-## 2. TASK LIFECYCLE MATRIX (v1.1)
+## 2. TASK LIFECYCLE MATRIX (v1.1.1)
 
 | Task ID | Task Description | Status | Dependency / Reason |
 | :--- | :--- | :--- | :--- |
