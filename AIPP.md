@@ -7,7 +7,7 @@ Mühürlenmiştir. **AIPP v1.1.1 Final / Operations Extension** eklentisi; geli�
 ## 1. Temel İlke ve Mimari Katmanlaşma
 
 * **Çekirdek Veri Bağımsızlığı (Core Data Neutrality):** AIPP Çekirdeği (Core) veri tipinden bağımsızdır. Workspace üzerinde işlenen görev, bağlam ve gerekçe kayıtları PII (Kişisel Veri) içerebilir veya içermeyebilir. AIPP bir araç olarak verinin içeriğine müdahale etmez; yalnızca akışın deterministik doğruluğunu yönetir.
-* **Modüler Gizlilik Katmanı (Privacy Extension):** Sıfır Veri (Zero-PII), kriptografik UUID ve cihaz içi yerel işleme zorunlulukları AIPP çekirdeğinden çıkarılmış; yüksek mahremiyet gerektiren projeler (Noppa vb.) için isteğe bağlı bir eklenti olarak yapılandırılmıştır.
+* **Modüler Gizlilik Katmanı (Privacy Extension):** Sıfır Veri (Zero-PII), kriptografik UUID ve cihaz içi yerel işleme zorunlulukları AIPP çekirdeğinden çıkarılmış; yüksek mahremiyet gerektiren projeler için isteğe bağlı bir eklenti olarak yapılandırılmıştır.
 * **Fiziksel Yürütme Ayrımı (Execution vs. Simulation):** Sohbet arayüzünde üretilen tüm kod, metin ve kurgular **[SİMÜLASYON]** kabul edilir. Yapay zeka, gerçek sistemde (GitHub, Codespace, Drive, API) yapılmayan hiçbir adımı "çalıştırıldı", "uygulandı" veya "başlatıldı" olarak adlandıramaz. Yalnızca somut dosya/veri (`artifact`) değişikliği **[GERÇEK EXECUTION]** statüsündedir.
 
 ---
