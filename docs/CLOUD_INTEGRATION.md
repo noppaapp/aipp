@@ -6,5 +6,5 @@
 ---
 
 ## 1. GENEL İLKELER
-* **Decoupled Architecture:** Protokol, herhangi bir uygulamanın (Noppa vb.) iş mantığından tamamen bağımsız çalışır.
+* **Decoupled Architecture:** Protokol, herhangi bir uygulamanın iş mantığından tamamen bağımsız çalışır.
 * **Data Minimization:** Veri işleme sınırları projeden bağımsız olarak yönetişim kurallarına tabidir.
