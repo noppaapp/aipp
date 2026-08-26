@@ -3,14 +3,11 @@
 **Date:** 2026-08-26  
 **Repository:** `noppaapp/aipp`  
 **Branch:** `main`  
-**Verified HEAD:** `8b8d57b968d47144b6b421738d9adbd1cd55066e`  
-**Purpose:** Current factual checkpoint after Noppa-specific state cleanup, final documentation cleanup, and successful final pipeline verification.
+**Purpose:** Release-readiness status snapshot. The live `main` commit and its GitHub Actions result are the authoritative final proof; this document intentionally does not hardcode a commit or run number.
 
 ## 1. Executive Status
 
-**AIPP has passed the current final readiness gate.**
-
-The latest `main` commit was manually executed through the canonical AIPP Autonomous Pipeline and completed with `SUCCESS`. The same commit also passed the push-triggered pipeline.
+**AIPP v1.1.1 Final / Operations Extension is release-ready when the latest `main` pipeline is `SUCCESS` with all required steps green.**
 
 ## 2. Verified Architecture
 
@@ -29,84 +26,44 @@ Responsibilities:
 
 ## 3. Verified Cleanup
 
-- `workspace_state.json` containing Noppa-specific project state was removed.
+- Noppa-specific `workspace_state.json` was removed.
 - Noppa-specific examples were removed from `AIPP.md` and `docs/CLOUD_INTEGRATION.md`.
-- `PROJECT_BOOT.md` remains the generic AIPP reference bootstrap.
+- `PROJECT_BOOT.md` is the generic AIPP reference bootstrap.
 - Canonical version references are aligned to AIPP v1.1.1 Final / Operations Extension.
 - The runtime does not persist `aipp_state.json` as canonical state.
 
 ## 4. Verified Drive Runtime
 
-The final pipeline successfully verified the live Drive runtime path:
+The Drive runtime path has been verified through GitHub Actions:
 
-- Drive tree discovery: `folders=4 files=25`.
-- Canonical `PROJECT_BOOT.md` was found and read successfully.
-- Canonical state was transported through `GITHUB_ENV` with ephemeral storage semantics.
-- `AUTHORITY_LOG.md` was not present; the runtime correctly kept the authority gate required and did not infer approval.
-- One task candidate was discovered and marked as requiring the Authority Gate.
-- Runtime state remained purely ephemeral.
+- Canonical `PROJECT_BOOT.md` is discoverable and readable.
+- Canonical state is transported through `GITHUB_ENV` with ephemeral storage semantics.
+- Missing `AUTHORITY_LOG.md` does not create approval; the Authority Gate remains required.
+- Discovered task candidates remain behind the Authority Gate.
+- Runtime state remains purely ephemeral.
 
-## 5. Verified Pipeline
+## 5. Verified Execution Contract
 
-Latest verified runs on `main`:
+The test suite covers the deterministic lifecycle:
 
-- **Workflow:** AIPP Autonomous Pipeline
-- **Latest manual run:** `32996071089` (#145)
-- **Latest push run:** `32995972879` (#144)
-- **Commit:** `8b8d57b968d47144b6b421738d9adbd1cd55066e`
-- **Branch:** `main`
-- **Result:** **SUCCESS**
+`initialize -> request approval -> canonical human approval -> execute -> artifact verification -> COMPLETED`
 
-Verified behavior includes:
+It also verifies session continuation behavior, recovery after failed verification, Authority Gate proposal identity, and rejection of autonomous approval.
 
-- Current commit checkout and revision verification.
-- Drive canonical state discovery and transport.
-- Workspace validation.
-- Full pytest suite: **21 passed**.
-- E2E session continuation: **2 passed**.
-- AIPP execution.
-- Runtime `active_project`: **AIPP Reference Implementation (Generic)**.
-- Ephemeral runtime-state assertion: **PASS**.
-- `aipp_state.json`: **not present** after execution.
+## 6. Final Gate
 
-## 6. Authority Gate
+`AIPP_FINAL_READINESS.md` defines the release gate: the latest `main` commit must have a GitHub Actions run with `SUCCESS` and all required steps green. A queued or merely triggered run is never proof.
 
-The runtime remains deterministic and does not autonomously approve work. Runtime state is ephemeral, while canonical approval continuity remains external to the runner.
+## 7. Authority and Operations
 
-## 7. Concurrency
+- Authority approval is external to ephemeral runner memory.
+- GitHub Actions concurrency uses `cancel-in-progress: false`.
+- Git/runtime separation is preserved.
+- No Git-persisted runtime state is allowed.
 
-GitHub Actions workflow-level concurrency remains enabled with `cancel-in-progress: false`.
+## 8. Release Rule
 
-## 8. Final Verdict
-
-### Architecture
-**APPROVED / coherent**
-
-### Git/runtime separation
-**VERIFIED**
-
-### Drive canonical PROJECT_BOOT
-**VERIFIED**
-
-### Ephemeral runtime state
-**VERIFIED**
-
-### Authority Gate boundary
-**VERIFIED by current pipeline behavior**
-
-### Automated tests
-**21 passed**
-
-### E2E
-**2 passed**
-
-### Latest `main` pipeline
-**SUCCESS**
-
-### Release/final readiness
-**PASS / READY**
-
-This status report supersedes the previous regression checkpoint and records the verified state at `8b8d57b968d47144b6b421738d9adbd1cd55066e`.
+Do not declare the release final from this document alone. Confirm the live latest `main` Actions result first, then tag/release the exact verified commit.
 
 ## 9. Golden Rule
 
