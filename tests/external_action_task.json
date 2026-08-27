@@ -1,0 +1,7 @@
+{
+  "id": "TASK-EXTERNAL-GITHUB-PROOF",
+  "title": "Prove bounded external GitHub action",
+  "status": "NOW",
+  "external_action": "GITHUB_PROOF_BRANCH",
+  "description": "Create a temporary proof branch in the configured repository, verify it remotely, then delete it. This is a non-canonical integration test task and does not modify PROJECT_BOOT.md."
+}
