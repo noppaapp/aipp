@@ -11,7 +11,7 @@ import threading
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = Path(__file__).resolve().parent
 
-from aipp_runner import initialize_state, request_approval, approve_task, execute_task, verify_task, default_state
+from aipp_runner import initialize_state, request_approval, approve_task, execute_task, verify_task, continue_execution, default_state
 
 SESSION = default_state()
 LOCK = threading.Lock()
@@ -66,6 +66,13 @@ class Handler(BaseHTTPRequestHandler):
                     SESSION = execute_task(SESSION, str(ROOT))
                 elif command == "VERIFY":
                     SESSION = verify_task(SESSION, str(ROOT))
+                elif command == "CONTINUE":
+                    if not task_id:
+                        raise ValueError("task is required")
+                    SESSION = initialize_state(SESSION, str(ROOT))
+                    SESSION = request_approval(SESSION, task_id)
+                    SESSION = approve_task(SESSION, task_id)
+                    SESSION = continue_execution(SESSION, str(ROOT))
                 else:
                     raise ValueError("Unsupported panel command")
                 self._send(200, json.dumps(public_state(), ensure_ascii=False))
