@@ -1,7 +1,7 @@
 name: AIPP Autonomous Pipeline
 
 # CI verification surface: core AIPP behavior is validated end-to-end on main.
-# Post-merge main verification is intentionally triggered by pushes to tracked paths.
+# Post-merge main verification runs on tracked-path pushes to main.
 on:
   workflow_dispatch:
     inputs:
@@ -14,6 +14,8 @@ on:
         required: false
         default: ""
   push:
+    branches:
+      - main
     paths:
       - "aipp_runner.py"
       - "aipp_drive_runtime.py"
