@@ -18,6 +18,7 @@ on:
       - "aipp_drive_runtime.py"
       - "aipp_project_bootstrap.py"
       - "aipp_authority.py"
+      - "ai/**"
       - "tests/**"
       - "panel/**"
       - "AIPP.md"
