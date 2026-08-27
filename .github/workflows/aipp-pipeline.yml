@@ -18,6 +18,7 @@ on:
       - "aipp_drive_runtime.py"
       - "aipp_project_bootstrap.py"
       - "aipp_authority.py"
+      - "runtime/**"
       - "ai/**"
       - "tests/**"
       - "panel/**"
@@ -25,8 +26,6 @@ on:
       - "AIPP_FINAL_READINESS.md"
       - ".github/workflows/aipp-pipeline.yml"
 
-# Serialize repeated executions of the same revision, while preventing a stale
-# queued run from blocking verification of a newer commit.
 concurrency:
   group: aipp-autonomous-pipeline-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
@@ -35,7 +34,7 @@ jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -81,6 +80,16 @@ jobs:
           else
             python aipp_runner.py "$command" --workspace "."
           fi
+
+      - name: Prove real external GitHub execution
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          branch="aipp-proof/${GITHUB_RUN_ID}"
+          python -c "from runtime.github_external import create_proof_branch; print('EXTERNAL_REF=' + create_proof_branch('${branch}'))"
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${branch}" --jq '.ref'
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}"
+          echo "EXTERNAL_GITHUB_ACTION=PASS"
 
       - name: Assert runtime state is ephemeral
         run: |
