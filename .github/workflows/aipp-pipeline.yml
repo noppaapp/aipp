@@ -1,6 +1,7 @@
 name: AIPP Autonomous Pipeline
 
 # CI verification surface: core AIPP behavior is validated end-to-end on main.
+# Post-merge main verification is intentionally triggered by pushes to tracked paths.
 on:
   workflow_dispatch:
     inputs:
