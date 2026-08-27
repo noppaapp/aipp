@@ -1,19 +1,17 @@
 import base64
 import json
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 from aipp_authority import proposal_id
+from aipp_runner import approve_task, continue_execution, default_state, initialize_state, request_approval
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNNER = ROOT / "aipp_runner.py"
 FIXTURE = ROOT / "tests" / "external_action_task.json"
 
 
 def test_runner_executes_real_external_github_action(tmp_path):
-    task = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     (tmp_path / "AIPP.md").write_text("# AIPP\n", encoding="utf-8")
     (tmp_path / "PROJECT_BOOT.md").write_text(
         "# PROJECT_BOOT: AIPP\n\n"
@@ -21,9 +19,13 @@ def test_runner_executes_real_external_github_action(tmp_path):
         "**Active State:** [READY]\n\n"
         "| Task ID | Task Description | Status | Dependency / Reason |\n"
         "| :--- | :--- | :--- | :--- |\n"
-        f"| **{task['id']}** | `{task['title']}` | `FUTURE` | - |\n",
+        f"| **{fixture['id']}** | `{fixture['title']}` | `FUTURE` | - |\n",
         encoding="utf-8",
     )
+
+    state = initialize_state(default_state(), tmp_path)
+    task = state["task_lifecycle"]["FUTURE"][0]
+    task["external_action"] = fixture["external_action"]
 
     approval = (
         "| Proposal ID | Task ID | Decision | Timestamp |\n"
@@ -32,17 +34,18 @@ def test_runner_executes_real_external_github_action(tmp_path):
     )
     env = os.environ.copy()
     env["AIPP_AUTHORITY_LOG_B64"] = base64.b64encode(approval.encode("utf-8")).decode("ascii")
+    old_env = os.environ.get("AIPP_AUTHORITY_LOG_B64")
+    os.environ["AIPP_AUTHORITY_LOG_B64"] = env["AIPP_AUTHORITY_LOG_B64"]
+    try:
+        state = request_approval(state, task["id"])
+        state = approve_task(state, task["id"])
+        state = continue_execution(state, tmp_path)
+    finally:
+        if old_env is None:
+            os.environ.pop("AIPP_AUTHORITY_LOG_B64", None)
+        else:
+            os.environ["AIPP_AUTHORITY_LOG_B64"] = old_env
 
-    result = subprocess.run(
-        [sys.executable, str(RUNNER), "CONTINUE", "--workspace", str(tmp_path), "--task", task["id"]],
-        cwd=tmp_path,
-        text=True,
-        capture_output=True,
-        env=env,
-        check=True,
-    )
-
-    state = json.loads(result.stdout)
     assert state["status"] == "COMPLETED"
     completed = state["task_lifecycle"]["COMPLETED"][0]
     assert completed["id"] == task["id"]
