@@ -1,6 +1,6 @@
 name: AIPP Autonomous Pipeline
 
-# CI verification surface: core AIPP behavior is validated end-to-end on main.
+# CI verification surface: core AIPP behavior is validated end-to-end.
 on:
   workflow_dispatch:
     inputs:
@@ -12,7 +12,12 @@ on:
         description: "Task ID when required"
         required: false
         default: ""
+  pull_request:
+    branches:
+      - main
   push:
+    branches:
+      - main
     paths:
       - "aipp_runner.py"
       - "aipp_drive_runtime.py"
