@@ -12,6 +12,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from aipp_project_bootstrap import bootstrap_project_from_text
 from aipp_authority import AUTHORITY_LOG, AUTHORITY_ENV, is_approved, proposal_id
+from runtime.continuation import ContinuationHalt, continue_verified
 
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
@@ -170,12 +171,39 @@ def verify_task(state, workspace):
     return state
 
 
+def continue_execution(state, workspace, max_attempts=3):
+    """Run the real execute/verify lifecycle through the bounded continuation loop."""
+    def execute_step(current):
+        return execute_task(current, workspace)
+
+    def verify_step(current):
+        task = current["task_lifecycle"].get("NOW")
+        if not task or task.get("status") != "EXECUTED":
+            return False
+        artifact_path = Path(workspace) / task.get("artifact", "")
+        if not artifact_path.exists():
+            task["status"] = "NOW"
+            return False
+        artifact = load_json(artifact_path)
+        valid = artifact.get("task_id") == task.get("id") and artifact.get("result") == "EXECUTED"
+        if not valid:
+            task["status"] = "NOW"
+        return valid
+
+    try:
+        result = continue_verified(state, execute_step, verify_step, max_attempts=max_attempts)
+    except ContinuationHalt as exc:
+        raise RuntimeError(str(exc)) from exc
+    return verify_task(result.result, workspace)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("command", nargs="?", default="BAŞLA")
     parser.add_argument("--workspace", default=".")
     parser.add_argument("--task")
     parser.add_argument("--authority-log", default=AUTHORITY_LOG)
+    parser.add_argument("--max-attempts", type=int, default=3)
     args = parser.parse_args()
     workspace = Path(args.workspace).resolve()
     workspace.mkdir(parents=True, exist_ok=True)
@@ -196,6 +224,13 @@ def main():
         state = execute_task(state, ".")
     elif command == "VERIFY":
         state = verify_task(state, ".")
+    elif command == "CONTINUE":
+        if not args.task:
+            raise RuntimeError("HALT: --task is required for CONTINUE.")
+        state = initialize_state(state, ".")
+        state = request_approval(state, args.task)
+        state = approve_task(state, args.task)
+        state = continue_execution(state, ".", max_attempts=args.max_attempts)
     elif command == "RUN":
         raise RuntimeError("HALT: RUN cannot autonomously approve a task. Use canonical Authority Gate approval before EXECUTE.")
     else:

@@ -1,6 +1,10 @@
+import base64
 import json
+import os
 import subprocess
 import sys
+
+from aipp_authority import proposal_id
 
 
 ROOT = __import__("pathlib").Path(__file__).resolve().parents[2]
@@ -59,3 +63,35 @@ def test_session_restart_reloads_canonical_project_boot(tmp_path):
     assert not (tmp_path / "aipp_state.json").exists()
 
     print("SESSION_CONTINUATION_PROOF: canonical PROJECT_BOOT reloaded; ephemeral authority state was not restored")
+
+
+def test_runner_continuation_consumes_canonical_approval(tmp_path):
+    """The real runner must consume canonical approval before bounded continuation."""
+    write_boot(tmp_path)
+    task = {
+        "id": "SESSION-001",
+        "title": "Cross-session continuation proof",
+        "status": "FUTURE",
+        "dependency_reason": "-",
+    }
+    approval = (
+        "| Proposal ID | Task ID | Decision | Timestamp |\n"
+        "| :--- | :--- | :--- | :--- |\n"
+        f"| {proposal_id(task)} | SESSION-001 | APPROVED | 2026-08-27T00:00:00Z |\n"
+    )
+    previous = os.environ.get("AIPP_AUTHORITY_LOG_B64")
+    os.environ["AIPP_AUTHORITY_LOG_B64"] = base64.b64encode(approval.encode("utf-8")).decode("ascii")
+    try:
+        result = run("CONTINUE", tmp_path, "SESSION-001")
+    finally:
+        if previous is None:
+            os.environ.pop("AIPP_AUTHORITY_LOG_B64", None)
+        else:
+            os.environ["AIPP_AUTHORITY_LOG_B64"] = previous
+
+    state = json.loads(result.stdout)
+    assert state["status"] == "COMPLETED"
+    assert state["authority_gate"]["last_action"] == "VERIFIED"
+    assert state["task_lifecycle"]["COMPLETED"][0]["id"] == "SESSION-001"
+    assert (tmp_path / "artifacts" / "SESSION-001-execution.json").exists()
+    assert not (tmp_path / "aipp_state.json").exists()
