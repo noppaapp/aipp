@@ -13,6 +13,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from aipp_project_bootstrap import bootstrap_project_from_text
 from aipp_authority import AUTHORITY_LOG, AUTHORITY_ENV, is_approved, proposal_id
 from runtime.continuation import ContinuationHalt, continue_verified
+from runtime.github_external import ExternalActionHalt, execute_bounded_github_proof
 
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
@@ -139,10 +140,16 @@ def execute_task(state, workspace):
         raise RuntimeError("HALT: No task in NOW state")
     if task.get("status") not in {"APPROVED", "NOW"}:
         raise RuntimeError(f"HALT: Task is not executable: {task.get('status')}")
+    external_result = None
+    if task.get("external_action") == "GITHUB_PROOF_BRANCH":
+        try:
+            external_result = execute_bounded_github_proof(task["id"])
+        except ExternalActionHalt as exc:
+            raise RuntimeError(str(exc)) from exc
     artifact_dir = Path(workspace) / ARTIFACT_DIR
     artifact_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_dir / f"{task['id']}-execution.json"
-    save_json(artifact_path, {"task_id": task["id"], "title": task.get("title"), "execution_mode": state.get("execution_mode", "REAL"), "executed_at": utc_now(), "runner": state.get("runner_engine"), "result": "EXECUTED"})
+    save_json(artifact_path, {"task_id": task["id"], "title": task.get("title"), "execution_mode": state.get("execution_mode", "REAL"), "executed_at": utc_now(), "runner": state.get("runner_engine"), "external_result": external_result, "result": "EXECUTED"})
     task["status"] = "EXECUTED"
     task["artifact"] = str(artifact_path).replace("\\", "/")
     state["status"] = "EXECUTED"
@@ -161,6 +168,10 @@ def verify_task(state, workspace):
     artifact = load_json(artifact_path)
     if artifact.get("task_id") != task.get("id") or artifact.get("result") != "EXECUTED":
         raise RuntimeError("HALT: Artifact verification failed")
+    if task.get("external_action") == "GITHUB_PROOF_BRANCH":
+        external = artifact.get("external_result") or {}
+        if external.get("action") != "GITHUB_PROOF_BRANCH" or external.get("verified") is not True:
+            raise RuntimeError("HALT: External GitHub action verification failed")
     task["status"] = "COMPLETED"
     task["verified_at"] = utc_now()
     state["task_lifecycle"]["COMPLETED"].append(task)
@@ -172,7 +183,6 @@ def verify_task(state, workspace):
 
 
 def continue_execution(state, workspace, max_attempts=3):
-    """Run the real execute/verify lifecycle through the bounded continuation loop."""
     def execute_step(current):
         return execute_task(current, workspace)
 
@@ -186,6 +196,9 @@ def continue_execution(state, workspace, max_attempts=3):
             return False
         artifact = load_json(artifact_path)
         valid = artifact.get("task_id") == task.get("id") and artifact.get("result") == "EXECUTED"
+        if task.get("external_action") == "GITHUB_PROOF_BRANCH":
+            external = artifact.get("external_result") or {}
+            valid = valid and external.get("action") == "GITHUB_PROOF_BRANCH" and external.get("verified") is True
         if not valid:
             task["status"] = "NOW"
         return valid

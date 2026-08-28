@@ -1,6 +1,6 @@
 name: AIPP Autonomous Pipeline
 
-# CI verification surface: core AIPP behavior is validated end-to-end on main.
+# CI verification surface: core AIPP behavior is validated end-to-end.
 # Post-merge main verification runs on tracked-path pushes to main.
 on:
   workflow_dispatch:
@@ -13,6 +13,9 @@ on:
         description: "Task ID when required"
         required: false
         default: ""
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -67,6 +70,8 @@ jobs:
         run: test -f AIPP.md
 
       - name: Run AIPP tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: python -m pytest -q
 
       - name: Run E2E session continuation proof
