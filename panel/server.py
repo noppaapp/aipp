@@ -69,9 +69,6 @@ class Handler(BaseHTTPRequestHandler):
                 elif command == "CONTINUE":
                     if not task_id:
                         raise ValueError("task is required")
-                    SESSION = initialize_state(SESSION, str(ROOT))
-                    SESSION = request_approval(SESSION, task_id)
-                    SESSION = approve_task(SESSION, task_id)
                     SESSION = continue_execution(SESSION, str(ROOT))
                 else:
                     raise ValueError("Unsupported panel command")
