@@ -69,6 +69,8 @@ jobs:
         run: test -f AIPP.md
 
       - name: Run AIPP tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: python -m pytest -q
 
       - name: Run E2E session continuation proof
