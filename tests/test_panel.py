@@ -2,6 +2,7 @@ import base64
 import json
 import os
 import threading
+import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -23,6 +24,14 @@ def post(server, payload):
     )
     with urllib.request.urlopen(request) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def post_error(server, payload):
+    try:
+        post(server, payload)
+    except urllib.error.HTTPError as exc:
+        return exc.code, json.loads(exc.read().decode("utf-8"))
+    raise AssertionError("Expected HTTP 409 Conflict")
 
 
 def test_panel_delegates_to_aipp_core_without_disk_state(monkeypatch, tmp_path):
@@ -53,7 +62,7 @@ def test_panel_delegates_to_aipp_core_without_disk_state(monkeypatch, tmp_path):
         server.server_close()
 
 
-def test_panel_continue_uses_canonical_authority_and_core_loop(monkeypatch, tmp_path):
+def test_panel_continue_requires_explicit_authority(monkeypatch, tmp_path):
     monkeypatch.setattr(panel_server, "ROOT", tmp_path)
     monkeypatch.setattr(panel_server, "SESSION", panel_server.default_state())
     (tmp_path / "AIPP.md").write_text("# test\n", encoding="utf-8")
@@ -79,6 +88,16 @@ def test_panel_continue_uses_canonical_authority_and_core_loop(monkeypatch, tmp_
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
+        code, error = post_error(server, {"command": "CONTINUE", "task": "TASK-01"})
+        assert code == 409
+        assert "No task in NOW state" in error["error"]
+
+        state = post(server, {"command": "BAŞLA"})
+        assert state["status"] == "PROPOSAL_READY"
+        state = post(server, {"command": "REQUEST_APPROVAL", "task": "TASK-01"})
+        assert state["status"] == "AWAITING_AUTHORITY"
+        state = post(server, {"command": "APPROVE", "task": "TASK-01"})
+        assert state["status"] == "NOW"
         state = post(server, {"command": "CONTINUE", "task": "TASK-01"})
         assert state["status"] == "COMPLETED"
         assert state["authority_gate"]["last_action"] == "VERIFIED"
