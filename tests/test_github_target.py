@@ -28,7 +28,15 @@ def test_target_adapter_generates_bounded_branch():
 
 def test_target_adapter_applies_one_file_and_opens_pr(monkeypatch):
     calls = []
-    responses = iter(["BASE_SHA", "BLOB_SHA", "TREE_SHA", "COMMIT_SHA", "https://github.com/noppaapp/noppa/pull/1"])
+    responses = iter([
+        "BASE_SHA",
+        "BRANCH_REF",
+        "BLOB_SHA",
+        "BASE_TREE_SHA",
+        "TREE_SHA",
+        "COMMIT_SHA",
+        "https://github.com/noppaapp/noppa/pull/1",
+    ])
 
     monkeypatch.setenv("GITHUB_TOKEN", "token")
     monkeypatch.setenv("AIPP_TARGET_REPOSITORY", "noppaapp/noppa")
