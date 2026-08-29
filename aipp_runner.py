@@ -14,6 +14,7 @@ from aipp_project_bootstrap import bootstrap_project_from_text
 from aipp_authority import AUTHORITY_LOG, AUTHORITY_ENV, is_approved, proposal_id
 from runtime.continuation import ContinuationHalt, continue_verified
 from runtime.github_external import ExternalActionHalt, execute_bounded_github_proof
+from runtime.github_target import TargetProjectHalt, apply_text_file
 
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
@@ -141,11 +142,19 @@ def execute_task(state, workspace):
     if task.get("status") not in {"APPROVED", "NOW"}:
         raise RuntimeError(f"HALT: Task is not executable: {task.get('status')}")
     external_result = None
-    if task.get("external_action") == "GITHUB_PROOF_BRANCH":
-        try:
+    try:
+        if task.get("external_action") == "GITHUB_PROOF_BRANCH":
             external_result = execute_bounded_github_proof(task["id"])
-        except ExternalActionHalt as exc:
-            raise RuntimeError(str(exc)) from exc
+        elif task.get("external_action") == "GITHUB_TARGET_TEXT_FILE":
+            external_result = apply_text_file(
+                task["id"],
+                task.get("target_path", ""),
+                task.get("target_content", ""),
+                title=task.get("title"),
+                body=task.get("description"),
+            )
+    except (ExternalActionHalt, TargetProjectHalt) as exc:
+        raise RuntimeError(str(exc)) from exc
     artifact_dir = Path(workspace) / ARTIFACT_DIR
     artifact_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_dir / f"{task['id']}-execution.json"
@@ -172,6 +181,10 @@ def verify_task(state, workspace):
         external = artifact.get("external_result") or {}
         if external.get("action") != "GITHUB_PROOF_BRANCH" or external.get("verified") is not True:
             raise RuntimeError("HALT: External GitHub action verification failed")
+    if task.get("external_action") == "GITHUB_TARGET_TEXT_FILE":
+        external = artifact.get("external_result") or {}
+        if not external.get("repository") or not external.get("branch") or not external.get("pull_request"):
+            raise RuntimeError("HALT: Target project execution verification failed")
     task["status"] = "COMPLETED"
     task["verified_at"] = utc_now()
     state["task_lifecycle"]["COMPLETED"].append(task)
@@ -199,6 +212,9 @@ def continue_execution(state, workspace, max_attempts=3):
         if task.get("external_action") == "GITHUB_PROOF_BRANCH":
             external = artifact.get("external_result") or {}
             valid = valid and external.get("action") == "GITHUB_PROOF_BRANCH" and external.get("verified") is True
+        if task.get("external_action") == "GITHUB_TARGET_TEXT_FILE":
+            external = artifact.get("external_result") or {}
+            valid = valid and bool(external.get("repository") and external.get("branch") and external.get("pull_request"))
         if not valid:
             task["status"] = "NOW"
         return valid
