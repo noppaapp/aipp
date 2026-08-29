@@ -35,6 +35,7 @@ def test_target_adapter_applies_one_file_and_opens_pr(monkeypatch):
         "BASE_TREE_SHA",
         "TREE_SHA",
         "COMMIT_SHA",
+        "HEAD_REF",
         "https://github.com/noppaapp/noppa/pull/1",
     ])
 
