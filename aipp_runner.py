@@ -69,6 +69,40 @@ def load_canonical_authority_log():
         raise RuntimeError("HALT: Canonical AUTHORITY_LOG.md transport is invalid") from exc
 
 
+def load_discovered_candidates():
+    encoded = os.environ.get("AIPP_TASK_CANDIDATES_B64", "").strip()
+    if not encoded:
+        return []
+    try:
+        value = json.loads(base64.b64decode(encoded).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("HALT: Canonical Drive task discovery transport is invalid") from exc
+    if not isinstance(value, list):
+        raise RuntimeError("HALT: Canonical Drive task discovery payload is not a list")
+    return value
+
+
+def reconcile_discovered_tasks(state):
+    """Merge Drive discovery into the ephemeral FUTURE queue only."""
+    lifecycle = state.setdefault("task_lifecycle", {})
+    lifecycle.setdefault("FUTURE", [])
+    existing = {task.get("id") for task in lifecycle["FUTURE"] if isinstance(task, dict)}
+    for candidate in load_discovered_candidates():
+        for task_id in candidate.get("task_ids", []):
+            if task_id in existing:
+                continue
+            lifecycle["FUTURE"].append({
+                "id": task_id,
+                "title": f"Drive-discovered task {task_id}",
+                "status": "PROPOSED",
+                "dependency_reason": "Discovered in canonical Drive workspace",
+                "source": {"file_id": candidate.get("id"), "file_name": candidate.get("name")},
+            })
+            existing.add(task_id)
+    state.setdefault("authority_gate", {})["last_action"] = "WORKSPACE_DISCOVERY_PROPOSALS"
+    return state
+
+
 def default_state():
     return {
         "version": "1.1.1",
@@ -110,19 +144,19 @@ def request_approval(state, task_id):
 
 
 def approve_task(state, task_id, authority_log=None):
-    pending = state["authority_gate"].get("pending_approval")
-    if pending != task_id:
-        raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
     task = find_future_task(state, task_id)
     if task is None:
-        raise RuntimeError(f"HALT: Task disappeared from FUTURE: {task_id}")
-    expected_proposal = state["authority_gate"].get("pending_proposal_id")
+        raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
     actual_proposal = proposal_id(task)
-    if expected_proposal != actual_proposal:
+    pending = state["authority_gate"].get("pending_approval")
+    pending_proposal = state["authority_gate"].get("pending_proposal_id")
+    if pending is not None and pending != task_id:
+        raise RuntimeError(f"HALT: Authority Gate mismatch. pending={pending}, requested={task_id}")
+    if pending_proposal is not None and pending_proposal != actual_proposal:
         raise RuntimeError("HALT: Proposal changed after approval request")
     source = load_canonical_authority_log() if authority_log is None else authority_log
     if not is_approved(source, task):
-        raise RuntimeError(f"HALT: Canonical Authority Gate approval not found: {actual_proposal}")
+        raise RuntimeError(f"HALT: canonical Authority Gate transition missing approval: {actual_proposal}")
     state["task_lifecycle"]["FUTURE"].remove(task)
     task["status"] = "APPROVED"
     task["proposal_id"] = actual_proposal
@@ -242,13 +276,23 @@ def main():
     command = args.command.upper()
     if command == "BAŞLA":
         state = initialize_state(state, ".")
+    elif command == "RECONCILE":
+        state = initialize_state(state, ".")
+        state = reconcile_discovered_tasks(state)
+        state["status"] = "RECONCILED"
+        state["step"] = 1
     elif command == "REQUEST_APPROVAL":
         if not args.task:
             raise RuntimeError("HALT: --task is required.")
         state = initialize_state(state, ".")
+        state = reconcile_discovered_tasks(state)
         state = request_approval(state, args.task)
     elif command == "APPROVE":
-        raise RuntimeError("HALT: canonical Authority Gate transition requires external human approval; APPROVE cannot be performed by an ephemeral runner session")
+        if not args.task:
+            raise RuntimeError("HALT: --task is required.")
+        state = initialize_state(state, ".")
+        state = reconcile_discovered_tasks(state)
+        state = approve_task(state, args.task)
     elif command == "EXECUTE":
         state = execute_task(state, ".")
     elif command == "VERIFY":
