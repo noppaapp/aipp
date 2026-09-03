@@ -56,6 +56,26 @@ def get_credentials():
     raise RuntimeError("HALT: GDRIVE_CREDENTIALS must contain Client ID and Client Secret")
 
 
+def _google_oauth_error(error):
+    import json
+    try:
+        raw = error.read().decode("utf-8", errors="replace")
+    except Exception:
+        raw = ""
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        payload = {}
+    code = payload.get("error") if isinstance(payload, dict) else None
+    description = payload.get("error_description") if isinstance(payload, dict) else None
+    if code or description:
+        detail = f"error={code or 'unknown'}"
+        if description:
+            detail += f" description={description}"
+        raise RuntimeError(f"HALT: Google OAuth token exchange failed ({detail})") from error
+    raise RuntimeError(f"HALT: Google OAuth token exchange failed (HTTP {error.code})") from error
+
+
 def get_access_token():
     import json
     client_id, client_secret = get_credentials()
@@ -63,7 +83,11 @@ def get_access_token():
     if not refresh_token:
         raise RuntimeError("HALT: GCP_REFRESH_TOKEN is empty")
     payload = urlencode({"client_id": client_id, "client_secret": client_secret, "refresh_token": refresh_token, "grant_type": "refresh_token"}).encode()
-    result = json.loads(_request("https://oauth2.googleapis.com/token", "POST", payload, content_type="application/x-www-form-urlencoded"))
+    try:
+        raw = _request("https://oauth2.googleapis.com/token", "POST", payload, content_type="application/x-www-form-urlencoded")
+    except HTTPError as error:
+        _google_oauth_error(error)
+    result = json.loads(raw)
     if "access_token" not in result:
         raise RuntimeError("HALT: Google OAuth did not return an access token")
     return result["access_token"]
