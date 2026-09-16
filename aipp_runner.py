@@ -12,12 +12,14 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from aipp_project_bootstrap import bootstrap_project_from_text
 from aipp_authority import AUTHORITY_LOG, AUTHORITY_ENV, is_approved, proposal_id
+from aipp_drive_runtime import reconcile_discovered_tasks
 from runtime.continuation import ContinuationHalt, continue_verified
 from runtime.github_external import ExternalActionHalt, execute_bounded_github_proof
 from runtime.github_target import TargetProjectHalt, apply_text_file
 
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
+DISCOVERED_TASKS_ENV = "AIPP_DISCOVERED_TASKS_B64"
 
 
 def utc_now():
@@ -69,6 +71,19 @@ def load_canonical_authority_log():
         raise RuntimeError("HALT: Canonical AUTHORITY_LOG.md transport is invalid") from exc
 
 
+def load_discovered_tasks():
+    encoded = os.environ.get(DISCOVERED_TASKS_ENV, "").strip()
+    if not encoded:
+        return []
+    try:
+        value = json.loads(base64.b64decode(encoded).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("HALT: Discovered Drive task transport is invalid") from exc
+    if not isinstance(value, list):
+        raise RuntimeError("HALT: Discovered Drive task transport must be a list")
+    return value
+
+
 def default_state():
     return {
         "version": "1.1.1",
@@ -88,9 +103,9 @@ def load_state():
 
 def initialize_state(state, workspace):
     state = bootstrap_project_from_text(load_canonical_project_boot(workspace), state)
+    state = reconcile_discovered_tasks(state, load_discovered_tasks())
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
-    state["authority_gate"]["last_action"] = "INITIALIZATION"
     return state
 
 
@@ -146,13 +161,7 @@ def execute_task(state, workspace):
         if task.get("external_action") == "GITHUB_PROOF_BRANCH":
             external_result = execute_bounded_github_proof(task["id"])
         elif task.get("external_action") == "GITHUB_TARGET_TEXT_FILE":
-            external_result = apply_text_file(
-                task["id"],
-                task.get("target_path", ""),
-                task.get("target_content", ""),
-                title=task.get("title"),
-                body=task.get("description"),
-            )
+            external_result = apply_text_file(task["id"], task.get("target_path", ""), task.get("target_content", ""), title=task.get("title"), body=task.get("description"))
     except (ExternalActionHalt, TargetProjectHalt) as exc:
         raise RuntimeError(str(exc)) from exc
     artifact_dir = Path(workspace) / ARTIFACT_DIR
@@ -198,7 +207,6 @@ def verify_task(state, workspace):
 def continue_execution(state, workspace, max_attempts=3):
     def execute_step(current):
         return execute_task(current, workspace)
-
     def verify_step(current):
         task = current["task_lifecycle"].get("NOW")
         if not task or task.get("status") != "EXECUTED":
@@ -218,7 +226,6 @@ def continue_execution(state, workspace, max_attempts=3):
         if not valid:
             task["status"] = "NOW"
         return valid
-
     try:
         result = continue_verified(state, execute_step, verify_step, max_attempts=max_attempts)
     except ContinuationHalt as exc:
