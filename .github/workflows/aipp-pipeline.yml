@@ -22,6 +22,7 @@ on:
     paths:
       - "aipp_runner.py"
       - "aipp_drive_runtime.py"
+      - "aipp_drive_task_bridge.py"
       - "aipp_project_bootstrap.py"
       - "aipp_authority.py"
       - "runtime/**"
@@ -65,6 +66,13 @@ jobs:
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: python aipp_drive_runtime.py
+
+      - name: Bridge discovered Drive tasks into runtime
+        env:
+          GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: python aipp_drive_task_bridge.py
 
       - name: Validate protocol workspace
         run: test -f AIPP.md
