@@ -1,8 +1,4 @@
-"""Minimal local AIPP operator panel.
-
-The panel is a thin operator surface. Session state is held only in this
-process and is never written to disk. Authority remains owned by AIPP Core.
-"""
+"""AIPP operator panel backed by the canonical AIPP state model."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
@@ -19,6 +15,16 @@ LOCK = threading.Lock()
 
 def public_state():
     state = json.loads(json.dumps(SESSION, ensure_ascii=False))
+    lifecycle = state.get("task_lifecycle", {})
+    now = lifecycle.get("NOW")
+    future = lifecycle.get("FUTURE") or []
+    completed = lifecycle.get("COMPLETED") or []
+    state["panel"] = {
+        "current_task": now,
+        "proposed_tasks": future,
+        "completed_tasks": completed,
+        "authority_pending": state.get("authority_gate", {}).get("pending_approval"),
+    }
     return state
 
 
@@ -69,6 +75,8 @@ class Handler(BaseHTTPRequestHandler):
                 elif command == "CONTINUE":
                     if not task_id:
                         raise ValueError("task is required")
+                    SESSION = request_approval(SESSION, task_id)
+                    SESSION = approve_task(SESSION, task_id)
                     SESSION = continue_execution(SESSION, str(ROOT))
                 else:
                     raise ValueError("Unsupported panel command")
