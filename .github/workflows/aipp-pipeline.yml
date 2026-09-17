@@ -1,8 +1,15 @@
-name: AIPP Autonomous Pipeline
+name: AIPP Pipeline
 
-# CI verification surface: core AIPP behavior is validated end-to-end.
-# Post-merge main verification runs on tracked-path pushes to main.
 on:
+  push:
+    branches: [main]
+    paths:
+      - "AIPP.md"
+      - "aipp_*.py"
+      - "runtime/**"
+      - "tests/**"
+      - "panel/**"
+      - ".github/workflows/aipp-pipeline.yml"
   workflow_dispatch:
     inputs:
       command:
@@ -10,38 +17,16 @@ on:
         required: false
         default: "BAŞLA"
       task:
-        description: "Task ID when required"
+        description: "Task ID"
         required: false
         default: ""
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
-    paths:
-      - "aipp_runner.py"
-      - "aipp_drive_runtime.py"
-      - "aipp_drive_task_bridge.py"
-      - "aipp_project_bootstrap.py"
-      - "aipp_authority.py"
-      - "runtime/**"
-      - "ai/**"
-      - "tests/**"
-      - "panel/**"
-      - "AIPP.md"
-      - "AIPP_FINAL_READINESS.md"
-      - ".github/workflows/aipp-pipeline.yml"
 
-concurrency:
-  group: aipp-autonomous-pipeline-${{ github.ref }}-${{ github.sha }}
-  cancel-in-progress: false
+permissions:
+  contents: write
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -67,13 +52,6 @@ jobs:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: python aipp_drive_runtime.py
 
-      - name: Bridge discovered Drive tasks into runtime
-        env:
-          GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
-          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-        run: python aipp_drive_task_bridge.py
-
       - name: Validate protocol workspace
         run: test -f AIPP.md
 
@@ -84,6 +62,13 @@ jobs:
 
       - name: Run E2E session continuation proof
         run: python -m pytest -q -s tests/e2e/test_session_continuation.py
+
+      - name: Bridge discovered Drive tasks into runtime
+        env:
+          GCP_REFRESH_TOKEN: ${{ secrets.GCP_REFRESH_TOKEN }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: python aipp_drive_task_bridge.py
 
       - name: Run AIPP
         env:
