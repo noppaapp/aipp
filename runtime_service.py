@@ -1,0 +1,160 @@
+import base64
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from flask import Flask, jsonify, request
+
+from aipp_drive_runtime import (
+    get_access_token,
+    find_project_boot,
+    find_authority_log,
+    read_file_text,
+    discover_task_candidates,
+)
+
+app = Flask(__name__)
+ROOT = Path(__file__).resolve().parent
+
+
+def _require_runtime_token():
+    expected = os.environ.get("AIPP_RUNTIME_TOKEN", "").strip()
+    if not expected:
+        return
+    supplied = request.headers.get("Authorization", "")
+    if supplied != f"Bearer {expected}":
+        raise PermissionError("Invalid runtime token")
+
+
+def _drive_context():
+    token = get_access_token()
+    folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+    if not folder_id:
+        raise RuntimeError("HALT: GDRIVE_FOLDER_ID is empty")
+
+    boot_info = find_project_boot(token, folder_id)
+    if not boot_info:
+        raise RuntimeError("HALT: PROJECT_BOOT.md not found in configured Drive folder")
+    boot_text = read_file_text(token, boot_info)
+    if boot_text is None:
+        raise RuntimeError("HALT: PROJECT_BOOT.md could not be read from Google Drive")
+
+    authority_info = find_authority_log(token, folder_id)
+    authority_text = ""
+    if authority_info:
+        authority_text = read_file_text(token, authority_info)
+        if authority_text is None:
+            raise RuntimeError("HALT: AUTHORITY_LOG.md could not be read from Google Drive")
+
+    candidates = discover_task_candidates(token, folder_id)
+    return boot_text, authority_text, candidates
+
+
+def _run_aipp(command, task=None, max_attempts=3):
+    boot_text, authority_text, candidates = _drive_context()
+
+    env = os.environ.copy()
+    env["AIPP_PROJECT_BOOT_B64"] = base64.b64encode(boot_text.encode()).decode()
+    env["AIPP_AUTHORITY_LOG_B64"] = base64.b64encode(authority_text.encode()).decode()
+    env["AIPP_DISCOVERED_TASKS_B64"] = base64.b64encode(
+        json.dumps(candidates, ensure_ascii=False).encode()
+    ).decode()
+
+    cmd = [
+        sys.executable,
+        str(ROOT / "aipp_runner.py"),
+        command,
+        "--workspace",
+        str(ROOT),
+        "--max-attempts",
+        str(max_attempts),
+    ]
+    if task:
+        cmd.extend(["--task", task])
+
+    result = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+
+    stdout = result.stdout.strip()
+    stderr = result.stderr.strip()
+    payload = None
+    if stdout:
+        try:
+            payload = json.loads(stdout.splitlines()[-1])
+        except Exception:
+            pass
+
+    return result.returncode, payload, stdout, stderr
+
+
+@app.get("/health")
+def health():
+    return jsonify(
+        {
+            "ok": True,
+            "runner": "AIPP Standalone Cloud Runtime",
+            "source": "Google Drive",
+        }
+    )
+
+
+@app.get("/api/status")
+def status():
+    try:
+        _require_runtime_token()
+        boot, authority, candidates = _drive_context()
+        return jsonify(
+            {
+                "ok": True,
+                "source": "Google Drive",
+                "project_boot": bool(boot),
+                "authority_log": bool(authority),
+                "task_candidates": candidates,
+                "candidate_count": len(candidates),
+            }
+        )
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 401
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.post("/api/run")
+def run():
+    try:
+        _require_runtime_token()
+        body = request.get_json(silent=True) or {}
+        command = str(body.get("command") or "BAŞLA").upper()
+        task = str(body.get("task") or "").strip() or None
+        max_attempts = int(body.get("max_attempts") or 3)
+
+        code, payload, stdout, stderr = _run_aipp(command, task, max_attempts)
+        return (
+            jsonify(
+                {
+                    "ok": code == 0,
+                    "command": command,
+                    "task": task,
+                    "result": payload,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                }
+            ),
+            200 if code == 0 else 422,
+        )
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 401
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8080")))
