@@ -20,6 +20,8 @@ on:
         description: "Task ID"
         required: false
         default: ""
+  repository_dispatch:
+    types: [aipp-run]
 
 permissions:
   contents: write
@@ -72,8 +74,8 @@ jobs:
 
       - name: Run AIPP
         env:
-          AIPP_COMMAND: ${{ inputs.command }}
-          AIPP_TASK: ${{ inputs.task }}
+          AIPP_COMMAND: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.command || github.event.inputs.command || 'BAŞLA' }}
+          AIPP_TASK: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.task || github.event.inputs.task || '' }}
         run: |
           command="${AIPP_COMMAND:-BAŞLA}"
           if [ -n "$AIPP_TASK" ]; then
