@@ -93,7 +93,7 @@ def default_state():
         "task_lifecycle": {"NOW": None, "DEFERRED": [], "BLOCKED": [], "FUTURE": [], "REFERENCE": [], "COMPLETED": []},
         "authority_gate": {"pending_approval": None, "last_action": "INITIALIZATION"},
         "step": 0,
-        "runner_engine": "GitHub Actions Autonomous Cloud Runner",
+        "runner_engine": os.environ.get("AIPP_RUNTIME_ENGINE", "AIPP Standalone Cloud Runtime"),
     }
 
 
