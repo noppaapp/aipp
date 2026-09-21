@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: aipp-standalone-runtime
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn runtime_service:app --bind 0.0.0.0:$PORT --workers 1 --timeout 300
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: AIPP_RUNTIME_ENGINE
+        value: "AIPP Standalone Cloud Runtime"
+      - key: GDRIVE_FOLDER_ID
+        sync: false
+      - key: GDRIVE_CREDENTIALS
+        sync: false
+      - key: GCP_REFRESH_TOKEN
+        sync: false
+      - key: AIPP_RUNTIME_TOKEN
+        sync: false
