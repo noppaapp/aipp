@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request
 
 from aipp_drive_runtime import (
     get_access_token,
@@ -30,15 +30,13 @@ def _require_runtime_token():
         return
     supplied = request.headers.get("Authorization", "")
     if supplied != f"Bearer {expected}":
-        error = jsonify(
+        return jsonify(
             {
                 "ok": False,
                 "error": "Invalid runtime token",
+                "token_fingerprint": _token_fingerprint(expected),
             }
-        )
-        response = make_response(error, 401)
-        response.headers["X-AIPP-Runtime-Token-Fingerprint"] = _token_fingerprint(expected)
-        return response
+        ), 401
 
 
 def _drive_context():
