@@ -27,23 +27,20 @@ def _token_fingerprint(value):
 def _require_runtime_token():
     expected = os.environ.get("AIPP_RUNTIME_TOKEN", "").strip()
     if not expected:
-        print("AIPP_AUTH_CHECK expected=EMPTY supplied=NONE", flush=True)
         return
 
-    supplied_header = request.headers.get("X-AIPP-Runtime-Token", "")
-    if not supplied_header:
-        supplied_header = request.headers.get("Authorization", "")
-
-    if supplied_header.startswith("Bearer "):
-        supplied_token = supplied_header[7:]
-    else:
-        supplied_token = supplied_header
+    supplied_token = request.args.get("key", "").strip()
+    if not supplied_token:
+        supplied_header = request.headers.get("X-AIPP-Runtime-Token", "")
+        if not supplied_header:
+            supplied_header = request.headers.get("Authorization", "")
+        supplied_token = supplied_header[7:] if supplied_header.startswith("Bearer ") else supplied_header
 
     expected_fp = _token_fingerprint(expected)
     supplied_fp = _token_fingerprint(supplied_token) if supplied_token else "NONE"
     print(
         f"AIPP_AUTH_CHECK expected={expected_fp} supplied={supplied_fp} "
-        f"header_present={bool(supplied_header)}",
+        f"transport={'query' if request.args.get('key') else 'header'}",
         flush=True,
     )
 
