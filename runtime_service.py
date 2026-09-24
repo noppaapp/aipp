@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import hmac
 import json
 import os
 import subprocess
@@ -24,27 +25,30 @@ def _token_fingerprint(value):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
 
-def _require_runtime_token():
+def _require_runtime_token(body=None):
     expected = os.environ.get("AIPP_RUNTIME_TOKEN", "").strip()
     if not expected:
         return
 
-    supplied_token = request.args.get("key", "").strip()
-    if not supplied_token:
+    body = body or {}
+    supplied_token = str(body.get("_runtime_token") or "").strip()
+    if supplied_token:
+        supplied = supplied_token
+    else:
         supplied_header = request.headers.get("X-AIPP-Runtime-Token", "")
         if not supplied_header:
             supplied_header = request.headers.get("Authorization", "")
-        supplied_token = supplied_header[7:] if supplied_header.startswith("Bearer ") else supplied_header
+        supplied = supplied_header[7:] if supplied_header.startswith("Bearer ") else supplied_header
 
     expected_fp = _token_fingerprint(expected)
-    supplied_fp = _token_fingerprint(supplied_token) if supplied_token else "NONE"
+    supplied_fp = _token_fingerprint(supplied) if supplied else "NONE"
     print(
         f"AIPP_AUTH_CHECK expected={expected_fp} supplied={supplied_fp} "
-        f"transport={'query' if request.args.get('key') else 'header'}",
+        f"transport={'body' if supplied_token else 'header'}",
         flush=True,
     )
 
-    if supplied_token != expected:
+    if not hmac.compare_digest(supplied, expected):
         return jsonify(
             {
                 "ok": False,
@@ -156,15 +160,16 @@ def status():
 
 @app.post("/api/run")
 def run():
-    auth_error = _require_runtime_token()
+    body = request.get_json(silent=True) or {}
+    auth_error = _require_runtime_token(body)
     if auth_error:
         return auth_error
     try:
-        body = request.get_json(silent=True) or {}
         command = str(body.get("command") or "BAŞLA").upper()
         task = str(body.get("task") or "").strip() or None
         max_attempts = int(body.get("max_attempts") or 3)
 
+        body.pop("_runtime_token", None)
         code, payload, stdout, stderr = _run_aipp(command, task, max_attempts)
         return (
             jsonify(
