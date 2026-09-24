@@ -27,14 +27,24 @@ def _token_fingerprint(value):
 def _require_runtime_token():
     expected = os.environ.get("AIPP_RUNTIME_TOKEN", "").strip()
     if not expected:
+        print("AIPP_AUTH_CHECK expected=EMPTY supplied=NONE", flush=True)
         return
     supplied = request.headers.get("Authorization", "")
+    supplied_token = supplied[7:] if supplied.startswith("Bearer ") else supplied
+    expected_fp = _token_fingerprint(expected)
+    supplied_fp = _token_fingerprint(supplied_token) if supplied_token else "NONE"
+    print(
+        f"AIPP_AUTH_CHECK expected={expected_fp} supplied={supplied_fp} "
+        f"header_present={bool(supplied)}",
+        flush=True,
+    )
     if supplied != f"Bearer {expected}":
         return jsonify(
             {
                 "ok": False,
                 "error": "Invalid runtime token",
-                "token_fingerprint": _token_fingerprint(expected),
+                "token_fingerprint": expected_fp,
+                "supplied_fingerprint": supplied_fp,
             }
         ), 401
 
