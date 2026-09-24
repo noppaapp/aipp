@@ -1,11 +1,12 @@
 import base64
+import hashlib
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 
 from aipp_drive_runtime import (
     get_access_token,
@@ -19,13 +20,25 @@ app = Flask(__name__)
 ROOT = Path(__file__).resolve().parent
 
 
+def _token_fingerprint(value):
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
 def _require_runtime_token():
     expected = os.environ.get("AIPP_RUNTIME_TOKEN", "").strip()
     if not expected:
         return
     supplied = request.headers.get("Authorization", "")
     if supplied != f"Bearer {expected}":
-        raise PermissionError("Invalid runtime token")
+        error = jsonify(
+            {
+                "ok": False,
+                "error": "Invalid runtime token",
+            }
+        )
+        response = make_response(error, 401)
+        response.headers["X-AIPP-Runtime-Token-Fingerprint"] = _token_fingerprint(expected)
+        return response
 
 
 def _drive_context():
@@ -108,8 +121,10 @@ def health():
 
 @app.get("/api/status")
 def status():
+    auth_error = _require_runtime_token()
+    if auth_error:
+        return auth_error
     try:
-        _require_runtime_token()
         boot, authority, candidates = _drive_context()
         return jsonify(
             {
@@ -121,16 +136,16 @@ def status():
                 "candidate_count": len(candidates),
             }
         )
-    except PermissionError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 401
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 @app.post("/api/run")
 def run():
+    auth_error = _require_runtime_token()
+    if auth_error:
+        return auth_error
     try:
-        _require_runtime_token()
         body = request.get_json(silent=True) or {}
         command = str(body.get("command") or "BAŞLA").upper()
         task = str(body.get("task") or "").strip() or None
@@ -150,8 +165,6 @@ def run():
             ),
             200 if code == 0 else 422,
         )
-    except PermissionError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 401
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
