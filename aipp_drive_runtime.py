@@ -63,7 +63,26 @@ def get_access_token():
     if not refresh_token:
         raise RuntimeError("HALT: GCP_REFRESH_TOKEN is empty")
     payload = urlencode({"client_id": client_id, "client_secret": client_secret, "refresh_token": refresh_token, "grant_type": "refresh_token"}).encode()
-    result = json.loads(_request("https://oauth2.googleapis.com/token", "POST", payload, content_type="application/x-www-form-urlencoded"))
+    try:
+        result = json.loads(_request("https://oauth2.googleapis.com/token", "POST", payload, content_type="application/x-www-form-urlencoded"))
+    except HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")
+            parsed = json.loads(detail)
+            error_code = parsed.get("error", "unknown")
+            error_description = parsed.get("error_description", "")
+        except Exception:
+            error_code = "unknown"
+            error_description = ""
+        print(
+            f"GOOGLE_OAUTH_TOKEN_ERROR http={exc.code} error={error_code} "
+            f"description={error_description}",
+            flush=True,
+        )
+        raise RuntimeError(
+            f"HALT: Google OAuth token exchange failed http={exc.code} "
+            f"error={error_code} description={error_description}"
+        ) from exc
     if "access_token" not in result:
         raise RuntimeError("HALT: Google OAuth did not return an access token")
     return result["access_token"]
