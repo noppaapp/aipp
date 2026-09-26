@@ -15,6 +15,7 @@ from aipp_drive_runtime import (
     find_authority_log,
     read_file_text,
     discover_task_candidates,
+    get_credentials,
 )
 
 app = Flask(__name__)
@@ -22,7 +23,7 @@ ROOT = Path(__file__).resolve().parent
 
 
 def _token_fingerprint(value):
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12] if value else "NONE"
 
 
 def _require_runtime_token(body=None):
@@ -57,6 +58,14 @@ def _require_runtime_token(body=None):
                 "supplied_fingerprint": supplied_fp,
             }
         ), 401
+
+
+def _oauth_client_fingerprint():
+    try:
+        client_id, _ = get_credentials()
+        return _token_fingerprint(client_id)
+    except Exception:
+        return "INVALID_OR_MISSING"
 
 
 def _drive_context():
@@ -133,6 +142,7 @@ def health():
             "ok": True,
             "runner": "AIPP Standalone Cloud Runtime",
             "source": "Google Drive",
+            "oauth_client_fingerprint": _oauth_client_fingerprint(),
         }
     )
 
@@ -148,14 +158,24 @@ def status():
             {
                 "ok": True,
                 "source": "Google Drive",
+                "runtime": "AIPP Standalone Cloud Runtime",
                 "project_boot": bool(boot),
                 "authority_log": bool(authority),
                 "task_candidates": candidates,
                 "candidate_count": len(candidates),
+                "oauth_client_fingerprint": _oauth_client_fingerprint(),
             }
         )
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify(
+            {
+                "ok": False,
+                "source": "Google Drive",
+                "runtime": "AIPP Standalone Cloud Runtime",
+                "oauth_client_fingerprint": _oauth_client_fingerprint(),
+                "error": str(exc),
+            }
+        ), 500
 
 
 @app.post("/api/run")
@@ -168,6 +188,8 @@ def run():
         command = str(body.get("command") or "BAŞLA").upper()
         task = str(body.get("task") or "").strip() or None
         max_attempts = int(body.get("max_attempts") or 3)
+        if max_attempts < 1 or max_attempts > 5:
+            raise RuntimeError("HALT: max_attempts must be between 1 and 5")
 
         body.pop("_runtime_token", None)
         code, payload, stdout, stderr = _run_aipp(command, task, max_attempts)
@@ -180,12 +202,21 @@ def run():
                     "result": payload,
                     "stdout": stdout,
                     "stderr": stderr,
+                    "oauth_client_fingerprint": _oauth_client_fingerprint(),
                 }
             ),
             200 if code == 0 else 422,
         )
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify(
+            {
+                "ok": False,
+                "source": "Google Drive",
+                "runtime": "AIPP Standalone Cloud Runtime",
+                "oauth_client_fingerprint": _oauth_client_fingerprint(),
+                "error": str(exc),
+            }
+        ), 500
 
 
 if __name__ == "__main__":
