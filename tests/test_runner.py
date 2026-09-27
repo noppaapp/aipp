@@ -57,3 +57,20 @@ def test_run_cannot_autonomously_approve(tmp_path):
     assert result.returncode != 0
     assert "cannot autonomously approve" in result.stderr
     assert not (tmp_path / "aipp_state.json").exists()
+
+def test_runner_creates_passive_next_proposal_from_explicit_proof_signal(tmp_path):
+    write_boot(tmp_path, task_status="COMPLETED")
+    (tmp_path / "AIPP_EXECUTION_PROOF.md").write_text(
+        "# AIPP Execution Proof\\n\\nStatus: PROOF_REQUESTED\\n", encoding="utf-8"
+    )
+
+    result = run("BAŞLA", cwd=tmp_path)
+    state = json.loads(result.stdout)
+
+    assert state["status"] == "PROPOSAL_READY"
+    assert state["task_lifecycle"]["NOW"] is None
+    assert state["task_lifecycle"]["FUTURE"][0]["id"] == "TASK-02"
+    assert state["task_lifecycle"]["FUTURE"][0]["status"] == "PROPOSED"
+    assert state["task_lifecycle"]["FUTURE"][0]["external_action"] == "GITHUB_PROOF_BRANCH"
+    assert state["authority_gate"]["pending_approval"] is None
+    assert state["authority_gate"]["last_action"] == "AUTONOMOUS_PROPOSAL_CREATED"
