@@ -129,10 +129,10 @@ def recommend_next_proposal(state, workspace):
     proposal = {
         "id": f"TASK-{next_number:02d}",
         "title": "Complete AIPP execution proof",
-        "description": "Complete the outstanding physical execution proof and verify the external GitHub execution path.",
+        "description": "Complete the outstanding physical execution proof and verify the configured external execution capability.",
         "status": "PROPOSED",
         "proposal_reason": "AIPP_EXECUTION_PROOF.md is explicitly marked PROOF_REQUESTED while no pending task exists.",
-        "external_action": "GITHUB_PROOF_BRANCH",
+        "capability": "external_execution_proof",
         "source": {"artifact": "AIPP_EXECUTION_PROOF.md", "signal": "PROOF_REQUESTED"},
     }
     lifecycle.setdefault("FUTURE", []).append(proposal)
