@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 import requests
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 
 PANEL_DIR = Path(__file__).resolve().parent
 RUNTIME_URL = os.environ.get('AIPP_RUNTIME_URL', '').strip().rstrip('/')
@@ -68,7 +68,7 @@ def runtime_request(path, method='GET', payload=None):
 
 @app.get('/')
 def index():
-    return app.send_static_file('index.html')
+    return Response((PANEL_DIR / 'index.html').read_text(encoding='utf-8'), mimetype='text/html')
 
 @app.get('/health')
 def health():
