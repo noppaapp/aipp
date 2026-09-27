@@ -71,6 +71,8 @@ def test_runner_creates_passive_next_proposal_from_explicit_proof_signal(tmp_pat
     assert state["task_lifecycle"]["NOW"] is None
     assert state["task_lifecycle"]["FUTURE"][0]["id"] == "TASK-02"
     assert state["task_lifecycle"]["FUTURE"][0]["status"] == "PROPOSED"
-    assert state["task_lifecycle"]["FUTURE"][0]["external_action"] == "GITHUB_PROOF_BRANCH"
+    proposal = state["task_lifecycle"]["FUTURE"][0]
+    assert proposal["capability"] == "external_execution_proof"
+    assert "github" not in json.dumps(proposal).lower()
     assert state["authority_gate"]["pending_approval"] is None
     assert state["authority_gate"]["last_action"] == "AUTONOMOUS_PROPOSAL_CREATED"
