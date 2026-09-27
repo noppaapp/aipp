@@ -19,3 +19,24 @@ services:
         sync: false
       - key: AIPP_RUNTIME_TOKEN
         sync: false
+
+  - type: web
+    name: aipp-control-panel
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn panel.server:app --bind 0.0.0.0:$PORT --workers 1 --timeout 300
+    healthCheckPath: /health
+    envVars:
+      - key: AIPP_RUNTIME_URL
+        fromService:
+          name: aipp-standalone-runtime
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: AIPP_RUNTIME_TOKEN
+        fromService:
+          name: aipp-standalone-runtime
+          type: web
+          envVarKey: AIPP_RUNTIME_TOKEN
+      - key: AIPP_PANEL_TOKEN
+        sync: false
