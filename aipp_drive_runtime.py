@@ -254,13 +254,30 @@ def discover_task_candidates(token, folder_id):
             unreadable += 1
         haystack = f"{file_info.get('name', '')}\n{text or ''}"
         ids = sorted({m.upper().replace("_", "-").replace(" ", "-") for m in TASK_ID_RE.findall(haystack)})
+        completed_ids = set()
+        if text:
+            for task_id in ids:
+                escaped = re.escape(task_id)
+                if re.search(
+                    rf"{escaped}.*?(?:status|Status).*?(?:COMPLETED|completed)",
+                    text,
+                    re.IGNORECASE | re.DOTALL,
+                ):
+                    completed_ids.add(task_id)
+        active_ids = [task_id for task_id in ids if task_id not in completed_ids]
         print(
             f"DRIVE_FILE name={file_info.get('name', '')!r} mime={mime} "
-            f"readable={readable_flag} task_ids={ids}",
+            f"readable={readable_flag} task_ids={ids} completed_task_ids={sorted(completed_ids)}",
             flush=True,
         )
-        if ids:
-            candidates.append({"id": file_info["id"], "name": file_info.get("name"), "mimeType": mime, "task_ids": ids, "parents": file_info.get("parents", [])})
+        if active_ids:
+            candidates.append({
+                "id": file_info["id"],
+                "name": file_info.get("name"),
+                "mimeType": mime,
+                "task_ids": active_ids,
+                "parents": file_info.get("parents", []),
+            })
     mime_summary = ",".join(f"{key}:{value}" for key, value in sorted(mime_counts.items()))
     print(f"DRIVE_DISCOVERY files={scanned_files} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} mime_types={mime_summary}")
     return candidates
