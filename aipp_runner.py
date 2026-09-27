@@ -123,7 +123,7 @@ def recommend_next_proposal(state, workspace):
     numeric_ids = [
         int(match.group(1))
         for task_id in task_ids
-        if (match := re.fullmatch(r"TASK-(\\d+)", task_id))
+        if (match := re.fullmatch(r"TASK-(\d+)", task_id))
     ]
     next_number = max(numeric_ids, default=0) + 1
     proposal = {
