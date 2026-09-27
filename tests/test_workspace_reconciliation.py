@@ -62,7 +62,7 @@ def test_reconciliation_does_not_duplicate_existing_tasks():
 
 
 
-def test_reconciliation_does_not_promote_completed_discovery():
+def test_reconciliation_does_not_repromote_completed_task():
     state = {
         "status": "PROPOSAL_READY",
         "task_lifecycle": {
@@ -71,7 +71,7 @@ def test_reconciliation_does_not_promote_completed_discovery():
             "BLOCKED": [],
             "FUTURE": [],
             "REFERENCE": [],
-            "COMPLETED": [],
+            "COMPLETED": [{"id": "TASK-01", "status": "COMPLETED"}],
         },
         "authority_gate": {
             "pending_approval": None,
@@ -86,7 +86,7 @@ def test_reconciliation_does_not_promote_completed_discovery():
                 "id": "file-1",
                 "name": "aipp_state.json",
                 "mimeType": "application/json",
-                "task_ids": ["TASK-01", "TASK-02"],
+                "task_ids": ["TASK-01"],
             }
         ],
     )
