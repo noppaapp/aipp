@@ -62,7 +62,9 @@ def delete_proof_branch(branch_name: str) -> None:
 def execute_bounded_github_proof(task_id: str) -> dict:
     """Perform create -> remote verify -> delete for an approved AIPP task."""
     safe_id = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in str(task_id))
-    branch_name = f"aipp-proof/{safe_id}"
+    run_id = os.environ.get("GITHUB_RUN_ID", "").strip() or f"local-{os.getpid()}"
+    safe_run_id = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in run_id)
+    branch_name = f"aipp-proof/{safe_id}-{safe_run_id}"
     create_proof_branch(branch_name)
     try:
         verified = verify_proof_branch(branch_name)
