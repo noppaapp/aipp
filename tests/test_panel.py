@@ -1,113 +1,74 @@
-import base64
-import json
-import os
-import threading
-import urllib.error
-import urllib.request
-from http.server import ThreadingHTTPServer
-from pathlib import Path
-
 import panel.server as panel_server
 
-from aipp_authority import proposal_id
 
-ROOT = Path(__file__).resolve().parents[1]
+def test_panel_delegates_commands_to_runtime_without_disk_state(monkeypatch, tmp_path):
+    calls = []
 
+    def fake_runtime_request(path, method="GET", payload=None):
+        calls.append((path, method, payload))
+        return {
+            "ok": True,
+            "status": "PROPOSAL_READY",
+            "task_lifecycle": {"FUTURE": []},
+        }
 
-def post(server, payload):
-    url = f"http://127.0.0.1:{server.server_port}/api/command"
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read().decode("utf-8"))
+    monkeypatch.setattr(panel_server, "runtime_request", fake_runtime_request)
+    monkeypatch.setattr(panel_server, "PANEL_TOKEN", "")
 
-
-def post_error(server, payload):
-    try:
-        post(server, payload)
-    except urllib.error.HTTPError as exc:
-        return exc.code, json.loads(exc.read().decode("utf-8"))
-    raise AssertionError("Expected HTTP 409 Conflict")
-
-
-def test_panel_delegates_to_aipp_core_without_disk_state(monkeypatch, tmp_path):
-    monkeypatch.setattr(panel_server, "ROOT", tmp_path)
-    monkeypatch.setattr(panel_server, "SESSION", panel_server.default_state())
-    (tmp_path / "AIPP.md").write_text("# test\n", encoding="utf-8")
-    (tmp_path / "PROJECT_BOOT.md").write_text(
-        "# PROJECT_BOOT: AIPP\n\n"
-        "**Workspace Status:** ACTIVE\n"
-        "**Active State:** [READY]\n\n"
-        "| Task ID | Task Description | Status | Dependency / Reason |\n"
-        "| :--- | :--- | :--- | :--- |\n"
-        "| **TASK-01** | `Panel execution proof` | `FUTURE` | - |\n",
-        encoding="utf-8",
+    client = panel_server.app.test_client()
+    response = client.post(
+        "/api/command",
+        json={"command": "BAŞLA"},
     )
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), panel_server.Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        state = post(server, {"command": "BAŞLA"})
-        assert state["active_project"] == "AIPP"
-        assert state["status"] == "PROPOSAL_READY"
-        assert state["task_lifecycle"]["FUTURE"][0]["id"] == "TASK-01"
-        assert not (tmp_path / "aipp_state.json").exists()
-    finally:
-        server.shutdown()
-        server.server_close()
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "PROPOSAL_READY"
+    assert calls == [
+        (
+            "/api/run",
+            "POST",
+            {"command": "BAŞLA", "task": None, "max_attempts": 3},
+        )
+    ]
+    assert not (tmp_path / "aipp_state.json").exists()
 
 
-def test_panel_continue_requires_explicit_authority(monkeypatch, tmp_path):
-    monkeypatch.setattr(panel_server, "ROOT", tmp_path)
-    monkeypatch.setattr(panel_server, "SESSION", panel_server.default_state())
-    (tmp_path / "AIPP.md").write_text("# test\n", encoding="utf-8")
-    (tmp_path / "PROJECT_BOOT.md").write_text(
-        "# PROJECT_BOOT: AIPP\n\n"
-        "**Workspace Status:** ACTIVE\n"
-        "**Active State:** [READY]\n\n"
-        "| Task ID | Task Description | Status | Dependency / Reason |\n"
-        "| :--- | :--- | :--- | :--- |\n"
-        "| **TASK-01** | `Panel continuation proof` | `FUTURE` | - |\n",
-        encoding="utf-8",
+def test_panel_preserves_runtime_error_status(monkeypatch):
+    def fake_runtime_request(path, method="GET", payload=None):
+        raise panel_server.RuntimeRequestError(
+            409,
+            {"ok": False, "error": "No task in NOW state"},
+        )
+
+    monkeypatch.setattr(panel_server, "runtime_request", fake_runtime_request)
+    monkeypatch.setattr(panel_server, "PANEL_TOKEN", "")
+
+    client = panel_server.app.test_client()
+    response = client.post(
+        "/api/command",
+        json={"command": "CONTINUE", "task": "TASK-01"},
     )
-    task = {"id": "TASK-01", "title": "Panel continuation proof", "status": "FUTURE", "dependency_reason": "-"}
-    approval = (
-        "| Proposal ID | Task ID | Decision | Timestamp |\n"
-        "| :--- | :--- | :--- | :--- |\n"
-        f"| {proposal_id(task)} | TASK-01 | APPROVED | 2026-08-27T00:00:00Z |\n"
-    )
-    previous = os.environ.get("AIPP_AUTHORITY_LOG_B64")
-    os.environ["AIPP_AUTHORITY_LOG_B64"] = base64.b64encode(approval.encode("utf-8")).decode("ascii")
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), panel_server.Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        code, error = post_error(server, {"command": "CONTINUE", "task": "TASK-01"})
-        assert code == 409
-        assert "No task in NOW state" in error["error"]
+    assert response.status_code == 409
+    assert response.get_json() == {
+        "ok": False,
+        "error": "No task in NOW state",
+    }
 
-        state = post(server, {"command": "BAŞLA"})
-        assert state["status"] == "PROPOSAL_READY"
-        state = post(server, {"command": "REQUEST_APPROVAL", "task": "TASK-01"})
-        assert state["status"] == "AWAITING_AUTHORITY"
-        state = post(server, {"command": "APPROVE", "task": "TASK-01"})
-        assert state["status"] == "NOW"
-        state = post(server, {"command": "CONTINUE", "task": "TASK-01"})
-        assert state["status"] == "COMPLETED"
-        assert state["authority_gate"]["last_action"] == "VERIFIED"
-        assert state["task_lifecycle"]["COMPLETED"][0]["id"] == "TASK-01"
-        assert (tmp_path / "artifacts" / "TASK-01-execution.json").exists()
-        assert not (tmp_path / "aipp_state.json").exists()
-    finally:
-        server.shutdown()
-        server.server_close()
-        if previous is None:
-            os.environ.pop("AIPP_AUTHORITY_LOG_B64", None)
-        else:
-            os.environ["AIPP_AUTHORITY_LOG_B64"] = previous
+
+def test_panel_config_status_exposes_configuration_without_secrets(monkeypatch):
+    monkeypatch.setattr(panel_server, "RUNTIME_URL", "https://runtime.example")
+    monkeypatch.setattr(panel_server, "RUNTIME_TOKEN", "test-runtime-token")
+    monkeypatch.setattr(panel_server, "PANEL_TOKEN", "")
+
+    client = panel_server.app.test_client()
+    response = client.get("/api/config-status")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["runtime_url_configured"] is True
+    assert data["runtime_token_configured"] is True
+    assert data["panel_token_configured"] is False
+    assert data["runtime_token_fingerprint"] == panel_server.fingerprint("test-runtime-token")
+    assert "test-runtime-token" not in response.get_data(as_text=True)
