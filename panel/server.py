@@ -68,7 +68,7 @@ def runtime_request(path, method='GET', payload=None):
 
 @app.get('/')
 def index():
-    return send_from_directory(PANEL_DIR, 'index.html')
+    return app.send_static_file('index.html')
 
 @app.get('/health')
 def health():
