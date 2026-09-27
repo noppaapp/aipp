@@ -46,6 +46,8 @@ def get_credentials():
         if isinstance(data, dict):
             client_id = data.get("client_id") or data.get("installed", {}).get("client_id") or data.get("web", {}).get("client_id")
             client_secret = data.get("client_secret") or data.get("installed", {}).get("client_secret") or data.get("web", {}).get("client_secret")
+            client_id = client_id.strip() if isinstance(client_id, str) else client_id
+            client_secret = client_secret.strip() if isinstance(client_secret, str) else client_secret
             if client_id and client_secret:
                 return client_id, client_secret
     except json.JSONDecodeError:
