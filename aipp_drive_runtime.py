@@ -247,12 +247,18 @@ def discover_task_candidates(token, folder_id):
             continue
         scanned_files += 1
         text = read_file_text(token, file_info)
-        if text is not None:
+        readable_flag = text is not None
+        if readable_flag:
             readable += 1
         else:
             unreadable += 1
         haystack = f"{file_info.get('name', '')}\n{text or ''}"
         ids = sorted({m.upper().replace("_", "-").replace(" ", "-") for m in TASK_ID_RE.findall(haystack)})
+        print(
+            f"DRIVE_FILE name={file_info.get('name', '')!r} mime={mime} "
+            f"readable={readable_flag} task_ids={ids}",
+            flush=True,
+        )
         if ids:
             candidates.append({"id": file_info["id"], "name": file_info.get("name"), "mimeType": mime, "task_ids": ids, "parents": file_info.get("parents", [])})
     mime_summary = ",".join(f"{key}:{value}" for key, value in sorted(mime_counts.items()))
