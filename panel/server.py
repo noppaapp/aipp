@@ -27,6 +27,14 @@ def require_panel_token():
         return jsonify({'ok': False, 'error': 'Panel authentication required'}), 401
     return None
 
+class RuntimeRequestError(RuntimeError):
+    def __init__(self, status_code, data):
+        self.status_code = status_code
+        self.data = data
+        message = data.get('error') if isinstance(data, dict) else None
+        super().__init__(f'Runtime HTTP {status_code}: {message or "request failed"}')
+
+
 def runtime_request(path, method='GET', payload=None):
     if not RUNTIME_URL:
         raise RuntimeError('AIPP_RUNTIME_URL is not configured')
@@ -55,8 +63,7 @@ def runtime_request(path, method='GET', payload=None):
         data = {'ok': False, 'error': response.text[:2000]}
 
     if not response.ok:
-        message = data.get('error') if isinstance(data, dict) else None
-        raise RuntimeError(f'Runtime HTTP {response.status_code}: {message or "request failed"}')
+        raise RuntimeRequestError(response.status_code, data)
     return data
 
 @app.get('/')
@@ -88,6 +95,8 @@ def command():
         task = str(body.get('task') or '').strip()
         payload = {'command': command_name, 'task': task or None, 'max_attempts': int(body.get('max_attempts') or 3)}
         return jsonify(runtime_request('/api/run', 'POST', payload))
+    except RuntimeRequestError as exc:
+        return jsonify(exc.data), exc.status_code
     except Exception as exc:
         return jsonify({'ok': False, 'error': str(exc)}), 502
 
