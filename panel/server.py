@@ -66,9 +66,20 @@ def runtime_request(path, method='GET', payload=None):
         raise RuntimeRequestError(response.status_code, data)
     return data
 
+def panel_html():
+    return Response((PANEL_DIR / 'index.html').read_text(encoding='utf-8'), mimetype='text/html')
+
 @app.get('/')
 def index():
-    return Response((PANEL_DIR / 'index.html').read_text(encoding='utf-8'), mimetype='text/html')
+    return panel_html()
+
+@app.get('/panel')
+def panel():
+    return panel_html()
+
+@app.get('/index.html')
+def index_html():
+    return panel_html()
 
 @app.get('/health')
 def health():
