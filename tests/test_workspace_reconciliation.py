@@ -59,3 +59,36 @@ def test_reconciliation_does_not_duplicate_existing_tasks():
     )
 
     assert [task["id"] for task in result["task_lifecycle"]["FUTURE"]] == ["TASK-05"]
+
+
+
+def test_reconciliation_does_not_promote_completed_discovery():
+    state = {
+        "status": "PROPOSAL_READY",
+        "task_lifecycle": {
+            "NOW": None,
+            "DEFERRED": [],
+            "BLOCKED": [],
+            "FUTURE": [],
+            "REFERENCE": [],
+            "COMPLETED": [],
+        },
+        "authority_gate": {
+            "pending_approval": None,
+            "last_action": "INITIALIZATION",
+        },
+    }
+
+    result = reconcile_discovered_tasks(
+        state,
+        [
+            {
+                "id": "file-1",
+                "name": "aipp_state.json",
+                "mimeType": "application/json",
+                "task_ids": ["TASK-01", "TASK-02"],
+            }
+        ],
+    )
+
+    assert result["task_lifecycle"]["FUTURE"] == []
