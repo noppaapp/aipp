@@ -101,9 +101,51 @@ def load_state():
     return default_state()
 
 
+def recommend_next_proposal(state, workspace):
+    """Create a deterministic passive proposal from a concrete workspace signal."""
+    lifecycle = state.get("task_lifecycle", {})
+    if lifecycle.get("NOW") or lifecycle.get("FUTURE"):
+        return state
+
+    proof_path = Path(workspace) / "AIPP_EXECUTION_PROOF.md"
+    if not proof_path.exists():
+        return state
+    proof_text = proof_path.read_text(encoding="utf-8")
+    if "Status: PROOF_REQUESTED" not in proof_text:
+        return state
+
+    task_ids = []
+    for bucket in ("DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED"):
+        for task in lifecycle.get(bucket) or []:
+            if isinstance(task, dict) and task.get("id"):
+                task_ids.append(str(task["id"]))
+    import re
+    numeric_ids = [
+        int(match.group(1))
+        for task_id in task_ids
+        if (match := re.fullmatch(r"TASK-(\\d+)", task_id))
+    ]
+    next_number = max(numeric_ids, default=0) + 1
+    proposal = {
+        "id": f"TASK-{next_number:02d}",
+        "title": "Complete AIPP execution proof",
+        "description": "Complete the outstanding physical execution proof and verify the external GitHub execution path.",
+        "status": "PROPOSED",
+        "proposal_reason": "AIPP_EXECUTION_PROOF.md is explicitly marked PROOF_REQUESTED while no pending task exists.",
+        "external_action": "GITHUB_PROOF_BRANCH",
+        "source": {"artifact": "AIPP_EXECUTION_PROOF.md", "signal": "PROOF_REQUESTED"},
+    }
+    lifecycle.setdefault("FUTURE", []).append(proposal)
+    state.setdefault("authority_gate", {})["pending_approval"] = None
+    state["authority_gate"]["last_action"] = "AUTONOMOUS_PROPOSAL_CREATED"
+    state["status"] = "PROPOSAL_READY"
+    return state
+
+
 def initialize_state(state, workspace):
     state = bootstrap_project_from_text(load_canonical_project_boot(workspace), state)
     state = reconcile_discovered_tasks(state, load_discovered_tasks())
+    state = recommend_next_proposal(state, workspace)
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
     return state
