@@ -18,6 +18,7 @@ from aipp_drive_runtime import (
     get_credentials,
 )
 from project_intelligence import analyze_documents
+from project_intelligence_ai import analyze_with_ai
 
 app = Flask(__name__)
 ROOT = Path(__file__).resolve().parent
@@ -91,6 +92,12 @@ def _drive_context():
 
     candidates, documents = discover_task_candidates(token, folder_id, include_documents=True)
     intelligence = analyze_documents(documents)
+    semantic = analyze_with_ai(documents)
+    intelligence["semantic"] = semantic
+    if semantic.get("available"):
+        intelligence["proposals"].extend(semantic.get("proposals", []))
+        intelligence["findings"].extend(semantic.get("findings", []))
+        intelligence["proposals"].sort(key=lambda p: (str(p.get("finding_type", "")), str(p.get("target", "")), str(p.get("action", ""))))
     return boot_text, authority_text, candidates, intelligence
 
 
