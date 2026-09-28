@@ -56,7 +56,13 @@ function saveToken(){const v=document.getElementById('panelToken').value.trim();
 function updateAuth(){document.getElementById('authState').textContent=token()?'Panel bağlantısı hazır':'Panel token gerekiyor'}
 function headers(){const h={'Content-Type':'application/json'};if(token())h['X-AIPP-Panel-Token']=token();return h}
 let suggestedTask='';
-function render(s){
+function normalizeState(data){
+ if(data && data.stdout){try{return JSON.parse(data.stdout)}catch(_){}}
+ if(data && data.result && typeof data.result === 'object') return data.result;
+ return data||{};
+}
+function render(data){
+ const s=normalizeState(data);
  const l=s.task_lifecycle||{}, g=s.authority_gate||{}, now=l.NOW, future=l.FUTURE||[];
  const p=future[0]; suggestedTask=p?.id||'';
  document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':(s.status||'BAĞLI');
