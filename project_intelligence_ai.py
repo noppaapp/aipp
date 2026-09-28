@@ -8,6 +8,7 @@ import os
 
 from ai.executor import execute
 from ai.providers import configured_adapter, ProviderError
+from ai.model_router import DEFAULT_MODELS
 
 SYSTEM = """You are AIPP Project Intelligence.
 Analyze ONLY the supplied project material.
@@ -98,7 +99,15 @@ def analyze_with_ai(documents):
         "max_output_tokens": 4096,
     }
     try:
-        selected = execute(task, configured_adapter("gemini") if os.environ.get("GEMINI_API_KEY") else configured_adapter("claude"))
+        enabled = {
+            "gemini": bool(os.environ.get("GEMINI_API_KEY")),
+            "claude": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        }
+        registry = tuple(model for model in DEFAULT_MODELS if enabled.get(model.provider, False))
+        if not registry:
+            return {"enabled": True, "available": False, "reason": "No configured AI provider key"}
+        provider = max(registry, key=lambda model: model.priority).provider
+        selected = execute(task, configured_adapter(provider), registry=registry)
     except ProviderError as exc:
         return {
             "enabled": True,
