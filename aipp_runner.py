@@ -20,6 +20,7 @@ from runtime.github_target import TargetProjectHalt, apply_text_file
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
 DISCOVERED_TASKS_ENV = "AIPP_DISCOVERED_TASKS_B64"
+PROJECT_INTELLIGENCE_ENV = "AIPP_PROJECT_INTELLIGENCE_B64"
 
 
 def utc_now():
@@ -84,6 +85,61 @@ def load_discovered_tasks():
     return value
 
 
+def load_project_intelligence():
+    encoded = os.environ.get(PROJECT_INTELLIGENCE_ENV, "").strip()
+    if not encoded:
+        return {"version": "0", "findings": [], "proposals": []}
+    try:
+        value = json.loads(base64.b64decode(encoded).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("HALT: Project intelligence transport is invalid") from exc
+    if not isinstance(value, dict):
+        raise RuntimeError("HALT: Project intelligence transport must be an object")
+    return value
+
+
+def reconcile_project_intelligence(state, intelligence):
+    result = state
+    lifecycle = result.setdefault("task_lifecycle", {})
+    future = lifecycle.setdefault("FUTURE", [])
+    existing_ids = {
+        task.get("id")
+        for bucket in ("NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED")
+        for task in ([lifecycle.get(bucket)] if bucket == "NOW" else (lifecycle.get(bucket) or []))
+        if isinstance(task, dict) and task.get("id")
+    }
+    for index, proposal in enumerate(intelligence.get("proposals", []), start=1):
+        proposal_id_value = f"INTEL-{index:04d}"
+        if proposal_id_value in existing_ids:
+            continue
+        future.append({
+            "id": proposal_id_value,
+            "title": f"Review: {proposal.get('target')}",
+            "description": proposal.get("reason"),
+            "status": "PROPOSED",
+            "proposal_reason": proposal.get("reason"),
+            "source": {
+                "engine": intelligence.get("engine"),
+                "finding_type": proposal.get("finding_type"),
+                "target": proposal.get("target"),
+                "evidence": proposal.get("evidence", []),
+            },
+            "change_action": proposal.get("action"),
+            "requires_authority": True,
+        })
+        existing_ids.add(proposal_id_value)
+    result["project_intelligence"] = {
+        "version": intelligence.get("version"),
+        "engine": intelligence.get("engine"),
+        "documents_scanned": intelligence.get("documents_scanned", 0),
+        "finding_count": len(intelligence.get("findings", [])),
+        "proposal_count": len(intelligence.get("proposals", [])),
+    }
+    if intelligence.get("proposals"):
+        result.setdefault("authority_gate", {})["last_action"] = "PROJECT_INTELLIGENCE_PROPOSALS"
+    return result
+
+
 def default_state():
     return {
         "version": "1.1.1",
@@ -145,6 +201,7 @@ def recommend_next_proposal(state, workspace):
 def initialize_state(state, workspace):
     state = bootstrap_project_from_text(load_canonical_project_boot(workspace), state)
     state = reconcile_discovered_tasks(state, load_discovered_tasks())
+    state = reconcile_project_intelligence(state, load_project_intelligence())
     state = recommend_next_proposal(state, workspace)
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
