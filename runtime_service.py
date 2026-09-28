@@ -22,6 +22,7 @@ from project_intelligence_ai import analyze_with_ai
 
 app = Flask(__name__)
 ROOT = Path(__file__).resolve().parent
+_STARTUP_SMOKE_DONE = False
 
 
 def _token_fingerprint(value):
@@ -145,6 +146,18 @@ def _run_aipp(command, task=None, max_attempts=3):
             pass
 
     return result.returncode, payload, stdout, stderr
+
+
+@app.before_request
+def _run_startup_smoke_once():
+    global _STARTUP_SMOKE_DONE
+    if _STARTUP_SMOKE_DONE:
+        return
+    if os.environ.get("AIPP_STARTUP_SMOKE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        _STARTUP_SMOKE_DONE = True
+        return
+    _STARTUP_SMOKE_DONE = True
+    _startup_smoke()
 
 
 @app.get("/health")
