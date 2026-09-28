@@ -3,7 +3,7 @@ from project_intelligence import analyze_documents
 
 def test_detects_conflicting_task_state_and_keeps_authority_required():
     result = analyze_documents([
-        {"id": "1", "name": "PROJECT_BOOT.md", "text": "| **TASK-01** | Build panel | \`COMPLETED\` | - |"},
+        {"id": "1", "name": "PROJECT_BOOT.md", "text": "| **TASK-01** | Build panel | `COMPLETED` | - |"},
         {"id": "2", "name": "decision-log.md", "text": "| TASK-01 | Build panel | BLOCKED | dependency |"},
     ])
     assert result["version"] == "2"
@@ -14,7 +14,7 @@ def test_detects_conflicting_task_state_and_keeps_authority_required():
 
 def test_detects_definition_drift():
     result = analyze_documents([
-        {"id": "1", "name": "PROJECT_BOOT.md", "text": "| **TASK-01** | Build panel | \`FUTURE\` | - |"},
+        {"id": "1", "name": "PROJECT_BOOT.md", "text": "| **TASK-01** | Build panel | `FUTURE` | - |"},
         {"id": "2", "name": "history.md", "text": "| TASK-01 | Build AI panel | FUTURE | - |"},
     ])
     assert any(f["type"] == "task_definition_drift" for f in result["findings"])
@@ -23,7 +23,7 @@ def test_detects_definition_drift():
 def test_detects_newer_supporting_source():
     result = analyze_documents([
         {"id": "1", "name": "PROJECT_BOOT.md", "modifiedTime": "2026-09-01T00:00:00Z",
-         "text": "| **TASK-01** | Build panel | \`FUTURE\` | - |"},
+         "text": "| **TASK-01** | Build panel | `FUTURE` | - |"},
         {"id": "2", "name": "decision-log.md", "modifiedTime": "2026-09-02T00:00:00Z",
          "text": "| TASK-01 | Build panel | COMPLETED | - |"},
     ])
