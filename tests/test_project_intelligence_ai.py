@@ -1,11 +1,10 @@
-import json
-
-from project_intelligence_ai import _validate
+from ai.executor import ExecutionResult
+import project_intelligence_ai as module
 
 
 def test_ai_proposal_requires_exact_source_quote():
     documents = [{"name": "PROJECT_BOOT.md", "text": "TASK-01 is FUTURE."}]
-    result = _validate({
+    result = module._validate({
         "findings": [],
         "proposals": [{
             "action": "ADD",
@@ -19,7 +18,7 @@ def test_ai_proposal_requires_exact_source_quote():
 
 def test_ai_proposal_with_exact_quote_is_authority_gated():
     documents = [{"name": "ideas.md", "text": "Next step: implement verification panel."}]
-    result = _validate({
+    result = module._validate({
         "findings": [],
         "proposals": [{
             "action": "ADD",
@@ -34,7 +33,7 @@ def test_ai_proposal_with_exact_quote_is_authority_gated():
 
 def test_invalid_action_is_discarded():
     documents = [{"name": "notes.md", "text": "Review this."}]
-    result = _validate({
+    result = module._validate({
         "findings": [],
         "proposals": [{
             "action": "EXECUTE",
@@ -44,3 +43,18 @@ def test_invalid_action_is_discarded():
         }],
     }, documents)
     assert result["proposals"] == []
+
+
+def test_malformed_ai_output_fails_closed(monkeypatch):
+    monkeypatch.setenv("AIPP_SEMANTIC_ANALYSIS", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(
+        module,
+        "execute",
+        lambda *args, **kwargs: ExecutionResult("gemini", "pro", "not-json"),
+    )
+    result = module.analyze_with_ai([{"name": "ideas.md", "text": "Next step: verify."}])
+    assert result["enabled"] is True
+    assert result["available"] is False
+    assert result["reason"].startswith("semantic analysis unavailable:")

@@ -108,13 +108,13 @@ def analyze_with_ai(documents):
             return {"enabled": True, "available": False, "reason": "No configured AI provider key"}
         provider = max(registry, key=lambda model: model.priority).provider
         selected = execute(task, configured_adapter(provider), registry=registry)
-    except ProviderError as exc:
+        validated = _validate(selected.output, documents)
+    except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
         return {
             "enabled": True,
             "available": False,
-            "reason": str(exc),
+            "reason": f"semantic analysis unavailable: {exc}",
         }
-    validated = _validate(selected.output, documents)
     return {
         "enabled": True,
         "available": True,
