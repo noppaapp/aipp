@@ -76,3 +76,31 @@ def test_runner_creates_passive_next_proposal_from_explicit_proof_signal(tmp_pat
     assert "github" not in json.dumps(proposal).lower()
     assert state["authority_gate"]["pending_approval"] is None
     assert state["authority_gate"]["last_action"] == "AUTONOMOUS_PROPOSAL_CREATED"
+
+
+def test_runner_reconciles_project_intelligence_into_future(tmp_path, monkeypatch):
+    write_boot(tmp_path, task_status="COMPLETED")
+    import base64
+    payload = {
+        "version": "1",
+        "documents_scanned": 2,
+        "kind_counts": {"canonical": 1, "idea": 1},
+        "evidence": [{"file_name": "idea_notes.md", "kind": "idea"}],
+        "proposals": [{
+            "action": "MODIFY",
+            "target": "Noppa Protocol",
+            "reason": "Explicit AIPP change directive found in workspace material.",
+            "evidence": [{"file_name": "idea_notes.md"}],
+            "requires_authority": True,
+            "status": "PROPOSED",
+        }],
+    }
+    monkeypatch.setenv("AIPP_PROJECT_INTELLIGENCE_B64", base64.b64encode(json.dumps(payload).encode()).decode())
+    result = run("BAŞLA", cwd=tmp_path)
+    state = json.loads(result.stdout)
+    proposal = state["task_lifecycle"]["FUTURE"][0]
+    assert proposal["id"] == "INTEL-0001"
+    assert proposal["change_action"] == "MODIFY"
+    assert proposal["target"] == "Noppa Protocol"
+    assert proposal["requires_authority"] is True
+    assert state["project_intelligence"]["documents_scanned"] == 2
