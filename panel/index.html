@@ -2,24 +2,91 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AIPP Control Panel</title>
+<title>AIPP Kontrol Paneli</title>
 <style>
 :root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color-scheme:dark;--bg:#0d1117;--card:#161b22;--line:#30363d;--muted:#8b949e;--ok:#3fb950;--warn:#d29922;--text:#e6edf3}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}main{max-width:1180px;margin:auto;padding:28px 20px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:22px}.title h1{margin:0 0 4px;font-size:26px}.muted{color:var(--muted)}.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}.system{grid-column:span 4}.task{grid-column:span 8}.lifecycle{grid-column:span 5}.activity{grid-column:span 7}.result{grid-column:1/-1}.label{font-size:12px;letter-spacing:.08em;color:var(--muted);margin-bottom:10px}.state{font-size:25px;font-weight:700}.row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}.row:last-child{border-bottom:0}input,button{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#21262d;color:var(--text)}input{width:150px}button{cursor:pointer}button:hover{background:#30363d}button.primary{font-weight:700}.controls{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}pre{white-space:pre-wrap;overflow:auto;margin:0;font-size:12px;line-height:1.55}.result-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.metric{border:1px solid var(--line);border-radius:8px;padding:12px}.metric b{display:block;margin-top:4px}.task-list{margin:8px 0 0;padding:0;list-style:none;max-height:180px;overflow:auto}.task-list li{padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}.task-list li:last-child{border-bottom:0}@media(max-width:800px){.system,.task,.lifecycle,.activity{grid-column:1/-1}.result-grid{grid-template-columns:repeat(2,1fr)}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}main{max-width:900px;margin:auto;padding:24px 16px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.title h1{margin:0 0 4px;font-size:25px}.muted{color:var(--muted);font-size:13px}.pill{padding:6px 10px;border:1px solid var(--line);border-radius:999px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}.label{font-size:11px;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}.state{font-size:24px;font-weight:700}.desc{line-height:1.5;margin:8px 0 0}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}button,input{padding:11px 13px;border:1px solid var(--line);border-radius:9px;background:#21262d;color:var(--text)}button{cursor:pointer;font-weight:600}button.primary{background:#238636;border-color:#238636}.proposal{border-left:4px solid var(--warn);padding-left:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}.row:last-child{border-bottom:0}.hidden{display:none}@media(max-width:650px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body><main>
-<header class="top"><div class="title"><h1>AIPP Control Panel</h1><div class="muted">v1.1.1 · operatör paneli · geçici oturum</div></div><div class="pill"><span class="dot"></span><span id="runtime">INITIALIZED</span></div></header><section class="card" style="margin-bottom:14px"><div class="label">PANEL ERİŞİMİ</div><div class="controls"><input id="panelToken" type="password" placeholder="Panel token" aria-label="Panel token" autocomplete="off"><button onclick="saveToken()">KAYDET</button><button onclick="clearToken()">TEMİZLE</button><span class="muted" id="authState">Token bekleniyor</span></div></section>
+<header class="top"><div class="title"><h1>AIPP Kontrol Paneli</h1><div class="muted">AIPP v1.1.1 · kullanıcı ekranı</div></div><div class="pill" id="runtime">BAĞLANIYOR</div></header>
+
+<section class="card" id="mainCard">
+<div class="label">SİSTEM DURUMU</div>
+<div class="state" id="status">Hazırlanıyor</div>
+<div class="desc" id="summary">AIPP durumu kontrol ediliyor.</div>
+<div class="actions"><button class="primary" onclick="run('BAŞLA')">BAŞLA</button></div>
+</section>
+
+<section class="card hidden" id="proposalCard">
+<div class="label">AIPP'NİN ÖNERİSİ</div>
+<div class="proposal">
+<div class="state" id="proposalTitle">—</div>
+<div class="desc" id="proposalDesc">—</div>
+</div>
+<div class="actions">
+<button class="primary" onclick="requestApproval()">ONAY İSTE</button>
+</div>
+<div class="muted" style="margin-top:10px">Onay gerektiren işlemler AIPP'nin yetki kapısından geçer. AIPP kendi kendine onay vermez.</div>
+</section>
+
+<section class="card">
+<div class="label">GÖREV DURUMU</div>
 <div class="grid">
-<section class="card system"><div class="label">SİSTEM</div><div class="state" id="status">INITIALIZED</div><div class="row"><span>Proje</span><b id="project">—</b></div><div class="row"><span>Mod</span><b id="mode">—</b></div><div class="row"><span>Çalıştırıcı</span><b id="runner">—</b></div><div class="row"><span>Adım</span><b id="step">0</b></div></section>
-<section class="card task"><div class="label">MEVCUT GÖREV</div><div class="row"><span>Görev</span><b id="taskName">—</b></div><div class="row"><span>Durum</span><b id="taskStatus">—</b></div><div class="row"><span>Yetki</span><b id="taskAuthority">—</b></div><div class="controls"><input id="task" placeholder="TASK-001" aria-label="Görev Kimliği"><button class="primary" onclick="run('BAŞLA')">BAŞLAT</button><button onclick="run('REQUEST_APPROVAL')">ONAY İSTE</button><button onclick="run('APPROVE')">ONAYLA</button><button onclick="run('EXECUTE')">ÇALIŞTIR</button><button onclick="run('VERIFY')">DOĞRULA</button><button class="primary" onclick="run('CONTINUE')">DEVAM ET</button></div></section>
-<section class="card lifecycle"><div class="label">GÖREV YAŞAM DÖNGÜSÜ</div><div class="row"><span>ŞİMDİ</span><b id="now">—</b></div><div class="row"><span>GELECEK / ÖNERİLEN</span><b id="futureCount">0</b></div><ul class="task-list" id="futureList"></ul><div class="row"><span>ENGELLENEN</span><b id="blockedCount">0</b></div><div class="row"><span>TAMAMLANAN</span><b id="completedCount">0</b></div></section>
-<section class="card activity"><div class="label">YETKİ / ÇALIŞMA ZAMANI DURUMU</div><div class="row"><span>Onay bekliyor</span><b id="pending">—</b></div><div class="row"><span>Son işlem</span><b id="lastAction">—</b></div><pre id="output">Hazır.</pre></section>
-<section class="card result"><div class="label">MEVCUT SONUÇ</div><div class="result-grid"><div class="metric">STATUS<b id="resultStatus">—</b></div><div class="metric">TASK<b id="resultTask">—</b></div><div class="metric">ÇIKTI<b id="artifact">—</b></div><div class="metric">GÜNCELLENDİ<b id="updated">—</b></div></div></section>
-</div></main>
+<div><div class="row"><span>Şu anki görev</span><b id="task">Yok</b></div><div class="row"><span>Durum</span><b id="taskStatus">Bekleniyor</b></div></div>
+<div><div class="row"><span>Önerilen görev</span><b id="future">0</b></div><div class="row"><span>Tamamlanan</span><b id="completed">0</b></div></div>
+</div>
+</section>
+
+<section class="card hidden" id="approvalCard">
+<div class="label">YETKİ</div>
+<div class="state">Onay işlemi bekleniyor</div>
+<div class="desc" id="approvalText"></div>
+</section>
+
+<section class="card">
+<div class="label">PANEL ERİŞİMİ</div>
+<div class="actions"><input id="panelToken" type="password" placeholder="Panel token" autocomplete="off"><button onclick="saveToken()">KAYDET</button></div>
+<div class="muted" id="authState" style="margin-top:8px">Token bekleniyor</div>
+</section>
+
 <script>
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function render(s){const l=s.task_lifecycle||{},g=s.authority_gate||{},n=l.NOW;document.getElementById('status').textContent=s.status||'UNKNOWN';document.getElementById('runtime').textContent=s.status||'UNKNOWN';document.getElementById('project').textContent=s.active_project||'—';document.getElementById('mode').textContent=s.execution_mode||'—';document.getElementById('runner').textContent=s.runner_engine||'—';document.getElementById('step').textContent=s.step??0;document.getElementById('taskName').textContent=n?.id||'—';document.getElementById('taskStatus').textContent=n?.status||'—';document.getElementById('taskAuthority').textContent=g.pending_approval?'PENDING':'—';document.getElementById('now').textContent=n?.id||'—';const f=l.FUTURE||[];document.getElementById('futureCount').textContent=f.length;document.getElementById('futureList').innerHTML=f.map(t=>`<li><b>${esc(t.id)}</b> · ${esc(t.status||'PROPOSED')}</li>`).join('')||'<li class="muted">Önerilen görev yok</li>';document.getElementById('blockedCount').textContent=(l.BLOCKED||[]).length;document.getElementById('completedCount').textContent=(l.COMPLETED||[]).length;document.getElementById('pending').textContent=g.pending_approval||'—';document.getElementById('lastAction').textContent=g.last_action||'—';document.getElementById('resultStatus').textContent=s.status||'—';document.getElementById('resultTask').textContent=n?.id||'—';document.getElementById('artifact').textContent=n?.artifact?'PRESENT':'—';document.getElementById('updated').textContent=s.last_updated||'—';document.getElementById('output').textContent=JSON.stringify(s,null,2)}
-function token(){return localStorage.getItem('aipp_panel_token')||''}function saveToken(){const value=document.getElementById('panelToken').value.trim();if(value)localStorage.setItem('aipp_panel_token',value);updateAuthState();refresh()}function clearToken(){localStorage.removeItem('aipp_panel_token');document.getElementById('panelToken').value='';updateAuthState();refresh()}function updateAuthState(){const ok=!!token();document.getElementById('authState').textContent=ok?'Token kayıtlı':'Token bekleniyor'}async function run(command){const out=document.getElementById('output');const task=document.getElementById('task').value;out.textContent=command+' çalışıyor…';try{const headers={'Content-Type':'application/json'};if(token())headers['X-AIPP-Panel-Token']=token();const r=await fetch('/api/command',{method:'POST',headers,body:JSON.stringify({command,task})});const text=await r.text();if(!r.ok){out.textContent=text;return}render(JSON.parse(text))}catch(e){out.textContent='Panel bağlantı hatası: '+e}}
-async function refresh(){try{const headers={};if(token())headers['X-AIPP-Panel-Token']=token();const r=await fetch('/api/status',{headers});if(r.ok)render(await r.json())}catch(_){} }document.getElementById('panelToken').value=token();updateAuthState();refresh();setInterval(refresh,2000);
+function token(){return localStorage.getItem('aipp_panel_token')||''}
+function saveToken(){const v=document.getElementById('panelToken').value.trim();if(v)localStorage.setItem('aipp_panel_token',v);updateAuth();refresh()}
+function updateAuth(){document.getElementById('authState').textContent=token()?'Panel bağlantısı hazır':'Panel token gerekiyor'}
+function headers(){const h={'Content-Type':'application/json'};if(token())h['X-AIPP-Panel-Token']=token();return h}
+function render(s){
+ const l=s.task_lifecycle||{}, g=s.authority_gate||{}, now=l.NOW, future=l.FUTURE||[];
+ const p=future[0];
+ document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':(s.status||'BAĞLI');
+ document.getElementById('status').textContent=s.status==='PROPOSAL_READY'?'ÖNERİ HAZIR':s.status||'HAZIR';
+ document.getElementById('summary').textContent=p?'AIPP tamamlanması gereken bir işlem belirledi. Ayrıntıyı aşağıda görebilirsin.':'Şu anda kullanıcı onayı gerektiren yeni bir işlem görünmüyor.';
+ document.getElementById('task').textContent=now?.id||'Yok';
+ document.getElementById('taskStatus').textContent=now?.status||'Bekleniyor';
+ document.getElementById('future').textContent=future.length;
+ document.getElementById('completed').textContent=(l.COMPLETED||[]).length;
+ document.getElementById('proposalCard').classList.toggle('hidden',!p);
+ if(p){document.getElementById('proposalTitle').textContent=p.title||'Yeni işlem';document.getElementById('proposalDesc').textContent=p.description||'AIPP bu işlemin tamamlanmasını öneriyor.'}
+ const pending=g.pending_approval;
+ document.getElementById('approvalCard').classList.toggle('hidden',!pending);
+ if(pending)document.getElementById('approvalText').textContent='AIPP '+pending+' için insan onayı bekliyor.';
+}
+async function run(command){
+ document.getElementById('status').textContent='ÇALIŞIYOR';
+ try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command})});const data=await r.json();if(!r.ok){document.getElementById('summary').textContent=data.error||'İşlem tamamlanamadı.';return}render(data)}
+ catch(e){document.getElementById('status').textContent='BAĞLANTI SORUNU';document.getElementById('summary').textContent='Panel AIPP Runtime ile iletişim kuramadı.'}
+}
+async function requestApproval(){
+ const cards=document.querySelectorAll('#proposalCard button');cards.forEach(b=>b.disabled=true);
+ const p=document.querySelector('#proposalTitle').textContent;
+ try{
+   const id=(document.querySelector('#proposalCard .proposal .state').textContent.match(/TASK-\d+/)||[])[0];
+   if(!id){document.getElementById('approvalText').textContent='Görev kimliği bulunamadı.';return}
+   await run('REQUEST_APPROVAL');
+ }finally{cards.forEach(b=>b.disabled=false)}
+}
+async function refresh(){
+ try{const r=await fetch('/api/status',{headers:token()?{'X-AIPP-Panel-Token':token()}:{} });if(r.ok)render(await r.json())}catch(_){}
+}
+document.getElementById('panelToken').value=token();updateAuth();refresh();setInterval(refresh,3000);
 </script></body></html>
