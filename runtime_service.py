@@ -17,6 +17,7 @@ from aipp_drive_runtime import (
     discover_task_candidates,
     get_credentials,
 )
+from project_intelligence import analyze_documents
 
 app = Flask(__name__)
 ROOT = Path(__file__).resolve().parent
@@ -88,18 +89,22 @@ def _drive_context():
         if authority_text is None:
             raise RuntimeError("HALT: AUTHORITY_LOG.md could not be read from Google Drive")
 
-    candidates = discover_task_candidates(token, folder_id)
-    return boot_text, authority_text, candidates
+    candidates, documents = discover_task_candidates(token, folder_id, include_documents=True)
+    intelligence = analyze_documents(documents)
+    return boot_text, authority_text, candidates, intelligence
 
 
 def _run_aipp(command, task=None, max_attempts=3):
-    boot_text, authority_text, candidates = _drive_context()
+    boot_text, authority_text, candidates, intelligence = _drive_context()
 
     env = os.environ.copy()
     env["AIPP_PROJECT_BOOT_B64"] = base64.b64encode(boot_text.encode()).decode()
     env["AIPP_AUTHORITY_LOG_B64"] = base64.b64encode(authority_text.encode()).decode()
     env["AIPP_DISCOVERED_TASKS_B64"] = base64.b64encode(
         json.dumps(candidates, ensure_ascii=False).encode()
+    ).decode()
+    env["AIPP_PROJECT_INTELLIGENCE_B64"] = base64.b64encode(
+        json.dumps(intelligence, ensure_ascii=False).encode()
     ).decode()
 
     cmd = [
@@ -153,7 +158,7 @@ def status():
     if auth_error:
         return auth_error
     try:
-        boot, authority, candidates = _drive_context()
+        boot, authority, candidates, intelligence = _drive_context()
         return jsonify(
             {
                 "ok": True,
@@ -164,6 +169,13 @@ def status():
                 "task_candidates": candidates,
                 "candidate_count": len(candidates),
                 "oauth_client_fingerprint": _oauth_client_fingerprint(),
+                "project_intelligence": {
+                    "version": intelligence.get("version"),
+                    "engine": intelligence.get("engine"),
+                    "documents_scanned": intelligence.get("documents_scanned"),
+                    "finding_count": len(intelligence.get("findings", [])),
+                    "proposal_count": len(intelligence.get("proposals", [])),
+                },
             }
         )
     except Exception as exc:

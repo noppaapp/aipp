@@ -236,9 +236,10 @@ def publish_authority_to_runtime_env(text):
     print("DRIVE_AUTHORITY_PUBLISHED transport=GITHUB_ENV storage=ephemeral")
 
 
-def discover_task_candidates(token, folder_id):
+def discover_task_candidates(token, folder_id, include_documents=False):
     files = list_workspace_tree(token, folder_id)
     candidates, readable, unreadable, scanned_files = [], 0, 0, 0
+    documents = []
     mime_counts = {}
     for file_info in files:
         mime = file_info.get("mimeType", "")
@@ -250,6 +251,13 @@ def discover_task_candidates(token, folder_id):
         readable_flag = text is not None
         if readable_flag:
             readable += 1
+            documents.append({
+                "id": file_info.get("id"),
+                "name": file_info.get("name"),
+                "mimeType": mime,
+                "modifiedTime": file_info.get("modifiedTime"),
+                "text": text,
+            })
         else:
             unreadable += 1
         haystack = f"{file_info.get('name', '')}\n{text or ''}"
@@ -280,7 +288,7 @@ def discover_task_candidates(token, folder_id):
             })
     mime_summary = ",".join(f"{key}:{value}" for key, value in sorted(mime_counts.items()))
     print(f"DRIVE_DISCOVERY files={scanned_files} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} mime_types={mime_summary}")
-    return candidates
+    return (candidates, documents) if include_documents else candidates
 
 
 def reconcile_discovered_tasks(state, candidates):
