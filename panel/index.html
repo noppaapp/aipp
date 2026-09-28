@@ -55,9 +55,10 @@ function token(){return localStorage.getItem('aipp_panel_token')||''}
 function saveToken(){const v=document.getElementById('panelToken').value.trim();if(v)localStorage.setItem('aipp_panel_token',v);updateAuth();refresh()}
 function updateAuth(){document.getElementById('authState').textContent=token()?'Panel bağlantısı hazır':'Panel token gerekiyor'}
 function headers(){const h={'Content-Type':'application/json'};if(token())h['X-AIPP-Panel-Token']=token();return h}
+let suggestedTask='';
 function render(s){
  const l=s.task_lifecycle||{}, g=s.authority_gate||{}, now=l.NOW, future=l.FUTURE||[];
- const p=future[0];
+ const p=future[0]; suggestedTask=p?.id||'';
  document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':(s.status||'BAĞLI');
  document.getElementById('status').textContent=s.status==='PROPOSAL_READY'?'ÖNERİ HAZIR':s.status||'HAZIR';
  document.getElementById('summary').textContent=p?'AIPP tamamlanması gereken bir işlem belirledi. Ayrıntıyı aşağıda görebilirsin.':'Şu anda kullanıcı onayı gerektiren yeni bir işlem görünmüyor.';
@@ -82,7 +83,7 @@ async function requestApproval(){
  try{
    const id=(document.querySelector('#proposalCard .proposal .state').textContent.match(/TASK-\d+/)||[])[0];
    if(!id){document.getElementById('approvalText').textContent='Görev kimliği bulunamadı.';return}
-   await run('REQUEST_APPROVAL');
+   const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'REQUEST_APPROVAL',task:id})}); const data=await r.json(); if(r.ok) render(data); else document.getElementById('approvalText').textContent=data.error||'Onay talebi oluşturulamadı.';
  }finally{cards.forEach(b=>b.disabled=false)}
 }
 async function refresh(){
