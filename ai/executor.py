@@ -22,8 +22,8 @@ class ExecutionResult:
     output: Any
 
 
-def execute(task: Mapping[str, Any], adapter: ProviderAdapter) -> ExecutionResult:
+def execute(task: Mapping[str, Any], adapter: ProviderAdapter, registry=None) -> ExecutionResult:
     """Select a model from task capabilities and delegate execution."""
-    selected = route(task.get("capabilities", ()))
+    selected = route(task.get("capabilities", ()), registry=registry) if registry is not None else route(task.get("capabilities", ()))
     output = adapter.execute(selected, task)
     return ExecutionResult(selected.provider, selected.model, output)
