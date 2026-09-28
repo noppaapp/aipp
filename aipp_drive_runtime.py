@@ -4,6 +4,7 @@ import re
 import zipfile
 import base64
 import copy
+import json
 from pathlib import Path
 
 from project_intelligence import analyze_documents
