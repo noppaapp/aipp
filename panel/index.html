@@ -92,8 +92,12 @@ async function requestApproval(){
    const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'REQUEST_APPROVAL',task:id})}); const data=await r.json(); if(r.ok) render(data); else document.getElementById('approvalText').textContent=data.error||'Onay talebi oluşturulamadı.';
  }finally{cards.forEach(b=>b.disabled=false)}
 }
+let refreshBusy=false;
 async function refresh(){
+ if(refreshBusy)return;
+ refreshBusy=true;
  try{const r=await fetch('/api/status',{headers:token()?{'X-AIPP-Panel-Token':token()}:{} });if(r.ok)render(await r.json())}catch(_){}
+ finally{refreshBusy=false}
 }
-document.getElementById('panelToken').value=token();updateAuth();refresh();setInterval(refresh,3000);
+document.getElementById('panelToken').value=token();updateAuth();refresh();setInterval(refresh,15000);
 </script></body></html>
