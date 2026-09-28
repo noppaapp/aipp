@@ -98,7 +98,7 @@ def analyze_with_ai(documents):
         "max_output_tokens": 4096,
     }
     try:
-        selected = execute(task, configured_adapter)
+        selected = execute(task, configured_adapter("gemini") if os.environ.get("GEMINI_API_KEY") else configured_adapter("claude"))
     except ProviderError as exc:
         return {
             "enabled": True,
