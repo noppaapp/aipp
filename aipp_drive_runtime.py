@@ -5,6 +5,8 @@ import zipfile
 import base64
 import copy
 from pathlib import Path
+
+from project_intelligence import analyze_documents
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
@@ -17,6 +19,7 @@ except ImportError:
 DRIVE_API = "https://www.googleapis.com/drive/v3"
 PROJECT_BOOT = "PROJECT_BOOT.md"
 AUTHORITY_LOG = "AUTHORITY_LOG.md"
+PROJECT_INTELLIGENCE_ENV = "AIPP_PROJECT_INTELLIGENCE_B64"
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
 GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation"
@@ -239,6 +242,7 @@ def publish_authority_to_runtime_env(text):
 def discover_task_candidates(token, folder_id):
     files = list_workspace_tree(token, folder_id)
     candidates, readable, unreadable, scanned_files = [], 0, 0, 0
+    documents = []
     mime_counts = {}
     for file_info in files:
         mime = file_info.get("mimeType", "")
@@ -252,6 +256,8 @@ def discover_task_candidates(token, folder_id):
             readable += 1
         else:
             unreadable += 1
+        if readable_flag:
+            documents.append({"id": file_info.get("id"), "name": file_info.get("name"), "mimeType": mime, "modifiedTime": file_info.get("modifiedTime"), "text": text})
         haystack = f"{file_info.get('name', '')}\n{text or ''}"
         ids = sorted({m.upper().replace("_", "-").replace(" ", "-") for m in TASK_ID_RE.findall(haystack)})
         completed_ids = set()
@@ -279,7 +285,14 @@ def discover_task_candidates(token, folder_id):
                 "parents": file_info.get("parents", []),
             })
     mime_summary = ",".join(f"{key}:{value}" for key, value in sorted(mime_counts.items()))
-    print(f"DRIVE_DISCOVERY files={scanned_files} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} mime_types={mime_summary}")
+    intelligence = analyze_documents(documents)
+    env_file = os.environ.get("GITHUB_ENV")
+    if not env_file:
+        raise RuntimeError("HALT: GITHUB_ENV is unavailable; refusing to materialize project intelligence on disk")
+    encoded = base64.b64encode(json.dumps(intelligence, ensure_ascii=False).encode("utf-8")).decode("ascii")
+    with open(env_file, "a", encoding="utf-8") as handle:
+        handle.write(f"{PROJECT_INTELLIGENCE_ENV}={encoded}\\n")
+    print(f"DRIVE_DISCOVERY files={scanned_files} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} intelligence_documents={intelligence['documents_scanned']} intelligence_proposals={len(intelligence['proposals'])} mime_types={mime_summary}")
     return candidates
 
 
