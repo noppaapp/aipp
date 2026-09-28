@@ -238,5 +238,26 @@ def run():
         ), 500
 
 
+def _startup_smoke():
+    if os.environ.get("AIPP_STARTUP_SMOKE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return
+    try:
+        _, _, candidates, intelligence = _drive_context()
+        semantic = intelligence.get("semantic") or {}
+        print(
+            "AIPP_STARTUP_SMOKE "
+            f"ok=true semantic_enabled={semantic.get('enabled')} "
+            f"semantic_available={semantic.get('available')} "
+            f"provider={semantic.get('provider', 'NONE')} "
+            f"model={semantic.get('model', 'NONE')} "
+            f"candidate_count={len(candidates)} "
+            f"proposal_count={len(intelligence.get('proposals', []))} "
+            f"reason={semantic.get('reason', 'NONE')}",
+            flush=True,
+        )
+    except Exception as exc:
+        print(f"AIPP_STARTUP_SMOKE ok=false error={exc}", flush=True)
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8080")))
