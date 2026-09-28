@@ -17,7 +17,7 @@ from aipp_drive_runtime import (
     discover_task_candidates,
     get_credentials,
 )
-from project_intelligence_engine import analyze_documents
+from project_intelligence import analyze_documents
 
 app = Flask(__name__)
 ROOT = Path(__file__).resolve().parent
