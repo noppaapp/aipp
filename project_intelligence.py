@@ -8,7 +8,7 @@ from datetime import datetime
 
 TASK_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 TABLE_TASK_RE = re.compile(
-    r"\|\s*\*?(TASK[-_ ]?\d+)\*?\s*\|\s*([^|]+?)\s*\|\s*\*?([A-Z][A-Z _-]+?)\*?\s*\|",
+    r"\|\s*[`*]*(TASK[-_ ]?\d+)[`*]*\s*\|\s*([^|]+?)\s*\|\s*[`*]*([A-Z][A-Z _-]+?)[`*]*\s*\|",
     re.IGNORECASE,
 )
 SUPERSEDES_RE = re.compile(
