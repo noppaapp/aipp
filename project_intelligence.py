@@ -5,6 +5,7 @@ Evidence-first only. It never approves, executes, or mutates project content.
 import re
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 
 TASK_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 TABLE_TASK_RE = re.compile(
@@ -24,6 +25,7 @@ KIND_WORDS = {
     "historical": ("history", "histor", "archive", "changelog", "decision", "decision-log", "record"),
     "idea": ("idea", "ideas", "note", "notes", "proposal", "brainstorm", "draft", "backlog"),
 }
+ARTIFACT_EXTENSIONS = {".zip", ".py", ".js", ".ts", ".toml", ".yaml", ".yml", ".json", ".xml", ".csv"}
 CANONICAL = {"PROJECT_BOOT.md": "project_state", "AIPP.md": "protocol"}
 
 
@@ -31,6 +33,9 @@ def _kind(name, text):
     if name in CANONICAL:
         return CANONICAL[name]
     lower = name.lower()
+    suffix = Path(name).suffix.lower()
+    if suffix in ARTIFACT_EXTENSIONS:
+        return "artifact"
     for kind, words in KIND_WORDS.items():
         if any(word in lower for word in words):
             return kind
