@@ -28,7 +28,7 @@
 </section>
 
 <section class="card hidden" id="proposalCard">
-<div class="label">AIPP'NİN ÖNERİSİ</div>
+<div class="label">ŞİMDİ NE OLUYOR?</div>
 <div class="proposal">
 <div class="state" id="proposalTitle">—</div>
 <div class="desc" id="proposalDesc">—</div>
@@ -44,16 +44,16 @@
 </section>
 
 <section class="card">
-<div class="label">GÖREV</div>
+<div class="label">DURUM</div>
 <div class="grid">
-<div><div class="row"><span>Şu an</span><b id="task">Yok</b></div><div class="row"><span>Durum</span><b id="taskStatus">Bekliyor</b></div></div>
-<div><div class="row"><span>Bekleyen öneri</span><b id="future">0</b></div><div class="row"><span>Tamamlanan</span><b id="completed">0</b></div></div>
+<div><div class="row"><span>Şimdi</span><b id="task">Bekliyor</b></div><div class="row"><span>Sonuç</span><b id="taskStatus">—</b></div></div>
+<div><div class="row"><span>Bekleyen işlem</span><b id="future">0</b></div><div class="row"><span>Tamamlanan işlem</span><b id="completed">0</b></div></div>
 </div>
 </section>
 
 <section class="card hidden" id="approvalCard">
 <div class="label">YETKİ</div>
-<div class="state">Onay bekleniyor</div>
+<div class="state">Senden onay bekleniyor</div>
 <div class="desc" id="approvalText"></div>
 </section>
 
@@ -90,10 +90,10 @@ function render(data, preserveRun=true){
  if(preserveRun && (s.project_intelligence || p || s.status==='PROPOSAL_READY')) lastRunState=data;
  document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':'BAĞLI';
  document.getElementById('status').textContent=s.status==='PROPOSAL_READY'?'ÖNERİ HAZIR':(s.status||'HAZIR');
- document.getElementById('summary').textContent=p?'AIPP çalışma alanını taradı ve insan kararı gerektiren bir öneri hazırladı.':'Şu anda yeni bir insan kararı gerektiren öneri görünmüyor.';
- document.getElementById('task').textContent=now?.id||'Yok';
- document.getElementById('taskStatus').textContent=now?.status||'Bekliyor';
- document.getElementById('future').textContent=future.length;
+ document.getElementById('summary').textContent=p?'AIPP çalışma alanını inceledi. Şimdi sana bir sonraki adımı söylüyor.':'AIPP çalışma alanını kontrol etti. Şu anda senden karar istemiyor.';
+ document.getElementById('task').textContent=now?(now.status==='AWAITING_AUTHORITY'?'Senden onay bekliyor':'Çalışıyor'):'Bekliyor';
+ document.getElementById('taskStatus').textContent=now?(now.status==='AWAITING_AUTHORITY'?'Henüz değişiklik yok':'Devam ediyor'):'—';
+ document.getElementById('future').textContent=p?'1':'0';
  document.getElementById('completed').textContent=(l.COMPLETED||[]).length;
  const scanVisible=Object.keys(intel).length>0;
  document.getElementById('scanCard').classList.toggle('hidden',!scanVisible);
@@ -107,7 +107,7 @@ function render(data, preserveRun=true){
  document.getElementById('proposalCard').classList.toggle('hidden',!p);
  if(p){
    document.getElementById('proposalTitle').textContent=p.title||'Yeni öneri';
-   document.getElementById('proposalDesc').textContent=p.description||p.proposal_reason||'AIPP bu işlemin yapılmasını öneriyor.';
+   document.getElementById('proposalDesc').textContent=proposalDescFor(p);
    document.getElementById('meaning').textContent=meaningFor(p);
    const pendingApproval=g.pending_approval;
 document.getElementById('approvalBtn').textContent=pendingApproval===p.id?'ONAY TALEBİ GÖNDERİLDİ':approvalLabel(p);
@@ -119,7 +119,7 @@ document.getElementById('approvalBtn').disabled=pendingApproval===p.id;
  }
  const pending=g.pending_approval;
  document.getElementById('approvalCard').classList.toggle('hidden',!pending);
- if(pending)document.getElementById('approvalText').textContent='AIPP '+pending+' için insan onayı bekliyor.';
+ if(pending)document.getElementById('approvalText').textContent='AIPP bir sonraki adım için senden onay bekliyor. Onay vermeden hiçbir dosyada değişiklik yapılmaz.';
  const findings=s.project_intelligence_findings||[];
  const fc=document.getElementById('findingsCard');
  fc.classList.toggle('hidden',!findings.length);
