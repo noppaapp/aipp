@@ -33,7 +33,7 @@
 <div class="state" id="proposalTitle">—</div>
 <div class="desc" id="proposalDesc">—</div>
 </div>
-<div class="evidence hidden" id="evidenceBox"><div class="label">BU SONUCA DAYANAN KANIT</div><div id="evidence"></div></div>
+<div class="evidence hidden" id="evidenceBox"><div class="label">İNCELEDİĞİ KAYNAK VE KANIT</div><div id="evidence"></div></div>
 <div class="notice" style="margin-top:12px"><b>Bu ne demek?</b><div id="meaning" style="margin-top:5px"></div></div>
 <div class="actions"><button class="primary" id="approvalBtn" onclick="requestApproval()">ONAY TALEBİ OLUŞTUR</button></div>
 </section>
@@ -104,7 +104,7 @@ function render(data){
    const ev=p.source?.evidence||p.evidence||[];
    const box=document.getElementById('evidenceBox'), el=document.getElementById('evidence');
    box.classList.toggle('hidden',!ev.length);
-   el.innerHTML=ev.map(x=>'<div style="margin-bottom:10px"><b>'+escapeHtml(x.file_name||'Belge')+'</b><code>'+escapeHtml(x.quote||'')+'</code></div>').join('');
+   el.innerHTML=ev.map(x=>'<div style="margin-bottom:14px"><b>'+escapeHtml(x.file_name||'Belge')+'</b><div class="muted" style="margin:4px 0 8px">Tür: '+escapeHtml(x.file_type||x.mime_type||'Bilinmiyor')+' · Kaynak: '+escapeHtml(x.source||'Google Drive')+'</div><div class="muted" style="margin-bottom:5px">AIPP bu kaynağın içeriğini bu bulgu için kullandı.</div><code>'+escapeHtml(x.quote||'Kanıt alıntısı bulunamadı.')+'</code></div>').join('');
  }
  const pending=g.pending_approval;
  document.getElementById('approvalCard').classList.toggle('hidden',!pending);
