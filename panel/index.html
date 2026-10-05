@@ -109,7 +109,9 @@ function render(data, preserveRun=true){
    document.getElementById('proposalTitle').textContent=p.title||'Yeni öneri';
    document.getElementById('proposalDesc').textContent=p.description||p.proposal_reason||'AIPP bu işlemin yapılmasını öneriyor.';
    document.getElementById('meaning').textContent=meaningFor(p);
-   document.getElementById('approvalBtn').textContent=approvalLabel(p);
+   const pendingApproval=g.pending_approval;
+document.getElementById('approvalBtn').textContent=pendingApproval===p.id?'ONAY TALEBİ GÖNDERİLDİ':approvalLabel(p);
+document.getElementById('approvalBtn').disabled=pendingApproval===p.id;
    const ev=p.source?.evidence||p.evidence||[];
    const box=document.getElementById('evidenceBox'), el=document.getElementById('evidence');
    box.classList.toggle('hidden',!ev.length);
@@ -122,6 +124,21 @@ function render(data, preserveRun=true){
  const fc=document.getElementById('findingsCard');
  fc.classList.toggle('hidden',!findings.length);
  document.getElementById('findingList').innerHTML=findings.map(x=>'<div class="finding"><b>'+escapeHtml(x.type||'Bulgu')+'</b><div>'+escapeHtml(x.claim||'')+'</div></div>').join('');
+}
+function proposalTitleFor(p){
+ const action=(p.change_action||p.source?.action||'REVIEW').toUpperCase();
+ const target=p.source?.target||p.target||'bu kaynağı';
+ if(action==='REVIEW')return 'İnceleme önerisi: '+target;
+ if(action==='RECONCILE')return 'Düzeltme önerisi: '+target;
+ if(action==='ADD')return 'Görev önerisi: '+target;
+ return 'AIPP önerisi: '+target;
+}
+function proposalDescFor(p){
+ const action=(p.change_action||p.source?.action||'REVIEW').toUpperCase();
+ if(action==='REVIEW')return 'AIPP çalışma alanında incelenmesi gereken bir içerik buldu. Önce inceleme yapılması öneriliyor.';
+ if(action==='RECONCILE')return 'AIPP mevcut kayıtlar arasında düzeltilmesi gereken bir uyumsuzluk buldu.';
+ if(action==='ADD')return 'AIPP çalışma alanında ayrı bir görev olarak ele alınması gereken bir iş buldu.';
+ return 'AIPP bu işlemin yapılmasını öneriyor.';
 }
 function meaningFor(p){
  const action=(p.change_action||p.source?.action||'REVIEW').toUpperCase();
