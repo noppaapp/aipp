@@ -74,12 +74,20 @@ function normalizeState(data){
  if(data&&data.stdout){try{return JSON.parse(data.stdout.split(/\\r?\\n/).filter(Boolean).pop())}catch(_){}}
  return data||{};
 }
-function render(data){
+let lastRunState=null;
+function saveRunState(data){
+ try{sessionStorage.setItem('aipp_last_run_state',JSON.stringify(data));}catch(_){}
+}
+function loadRunState(){
+ try{const v=sessionStorage.getItem('aipp_last_run_state');return v?JSON.parse(v):null}catch(_){return null}
+}
+function render(data, preserveRun=true){
  const s=normalizeState(data);
  const l=s.task_lifecycle||{}, g=s.authority_gate||{}, now=l.NOW, future=l.FUTURE||[];
  const intel=s.project_intelligence||{};
  const p=future[0];
  suggestedTask=p?.id||'';
+ if(preserveRun && (s.project_intelligence || p || s.status==='PROPOSAL_READY')) lastRunState=data;
  document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':'BAĞLI';
  document.getElementById('status').textContent=s.status==='PROPOSAL_READY'?'ÖNERİ HAZIR':(s.status||'HAZIR');
  document.getElementById('summary').textContent=p?'AIPP çalışma alanını taradı ve insan kararı gerektiren bir öneri hazırladı.':'Şu anda yeni bir insan kararı gerektiren öneri görünmüyor.';
@@ -104,7 +112,7 @@ function render(data){
    const ev=p.source?.evidence||p.evidence||[];
    const box=document.getElementById('evidenceBox'), el=document.getElementById('evidence');
    box.classList.toggle('hidden',!ev.length);
-   el.innerHTML=ev.map(x=>'<div style="margin-bottom:14px"><b>'+escapeHtml(x.file_name||'Belge')+'</b><div class="muted" style="margin:4px 0 8px">Tür: '+escapeHtml(x.file_type||x.mime_type||'Bilinmiyor')+' · Kaynak: '+escapeHtml(x.source||'Google Drive')+'</div><div class="muted" style="margin-bottom:5px">AIPP bu kaynağın içeriğini bu bulgu için kullandı.</div><code>'+escapeHtml(x.quote||'Kanıt alıntısı bulunamadı.')+'</code></div>').join('');
+   el.innerHTML=ev.map(x=>'<div style="margin-bottom:14px"><b>'+escapeHtml(x.file_name||'Belge')+'</b><div class="muted" style="margin:4px 0 8px">Tür: '+escapeHtml(x.file_type||x.mime_type||'Bilinmiyor')+' · Kaynak: '+escapeHtml(x.source||'Google Drive')+'</div><div class="muted" style="margin-bottom:5px">AIPP bu kaynağın içeriğini bu bulgu için kullandı.</div><details><summary>Teknik kanıtı göster</summary><code>'+escapeHtml(x.quote||'Kanıt alıntısı bulunamadı.')+'</code></details></div>').join('');
  }
  const pending=g.pending_approval;
  document.getElementById('approvalCard').classList.toggle('hidden',!pending);
@@ -125,17 +133,36 @@ async function run(command){
  const b=document.getElementById('startBtn');b.disabled=true;b.textContent='ÇALIŞIYOR...';
  document.getElementById('status').textContent='TARANIYOR';
  document.getElementById('summary').textContent='AIPP Drive belgelerini okuyor ve öneriyi kanıtla kontrol ediyor.';
- try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command})});const data=await r.json();if(!r.ok){document.getElementById('status').textContent='HATA';document.getElementById('summary').textContent=data.error||'İşlem tamamlanamadı.';return}render(data)}
+ try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command})});const data=await r.json();if(!r.ok){document.getElementById('status').textContent='HATA';document.getElementById('summary').textContent=data.error||'İşlem tamamlanamadı.';return}saveRunState(data);render(data)}
  catch(e){document.getElementById('status').textContent='BAĞLANTI SORUNU';document.getElementById('summary').textContent='Panel AIPP Runtime ile iletişim kuramadı.'}
  finally{b.disabled=false;b.textContent='BAŞLAT'}
 }
 async function requestApproval(){
  if(!suggestedTask){alert('Onaylanacak görev bulunamadı.');return}
  const b=document.getElementById('approvalBtn');b.disabled=true;b.textContent='TALEP GÖNDERİLİYOR...';
- try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'REQUEST_APPROVAL',task:suggestedTask})});const data=await r.json();if(r.ok)render(data);else document.getElementById('approvalText').textContent=data.error||'Onay talebi oluşturulamadı.'}
+ try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'REQUEST_APPROVAL',task:suggestedTask})});const data=await r.json();if(r.ok){saveRunState(data);render(data)}else document.getElementById('approvalText').textContent=data.error||'Onay talebi oluşturulamadı.'}
  finally{b.disabled=false;b.textContent='ONAY TALEBİ OLUŞTUR'}
 }
 let refreshBusy=false;
-async function refresh(){if(refreshBusy)return;refreshBusy=true;try{const r=await fetch('/api/status',{headers:token()?{'X-AIPP-Panel-Token':token()}:{} });if(r.ok)render(await r.json())}catch(_){}finally{refreshBusy=false}}
-document.getElementById('panelToken').value=token();updateAuth();refresh();setInterval(refresh,30000);
+async function refresh(){
+ if(refreshBusy)return;
+ refreshBusy=true;
+ try{
+   const r=await fetch('/api/status',{headers:token()?{'X-AIPP-Panel-Token':token()}:{} });
+   if(r.ok){
+     const data=await r.json();
+     document.getElementById('runtime').textContent=data.ok===false?'BAĞLANTI HATASI':'BAĞLI';
+     if(!lastRunState){
+       const saved=loadRunState();
+       if(saved){lastRunState=saved;render(saved,false)}
+       else render(data,false);
+     }
+   }
+ }catch(_){document.getElementById('runtime').textContent='BAĞLANTI SORUNU'}
+ finally{refreshBusy=false}
+}
+document.getElementById('panelToken').value=token();updateAuth();
+const savedRun=loadRunState();
+if(savedRun){lastRunState=savedRun;render(savedRun,false)}
+refresh();setInterval(refresh,30000);
 </script></body></html>
