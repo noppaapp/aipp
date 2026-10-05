@@ -87,4 +87,4 @@ def test_actionable_proposal_preserves_source_type_and_exact_quote():
     assert evidence["source"] == "Google Drive"
     assert evidence["quote"] in source
     assert "Next step" in evidence["quote"]
-\n
+
