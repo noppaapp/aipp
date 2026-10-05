@@ -66,7 +66,7 @@
 <script>
 function token(){return localStorage.getItem('aipp_panel_token')||''}
 function saveToken(){const v=document.getElementById('panelToken').value.trim();if(v)localStorage.setItem('aipp_panel_token',v);updateAuth();refresh()}
-function updateAuth(){document.getElementById('authState').textContent=token()?'Panel bağlantısı hazır':'Panel token gerekiyor'}
+function updateAuth(){document.getElementById('authState').textContent=token()?'Panel bağlantısı hazır':'Bağlantı kontrol ediliyor'}
 function headers(){const h={'Content-Type':'application/json'};if(token())h['X-AIPP-Panel-Token']=token();return h}
 let suggestedTask='';
 function normalizeState(data){
@@ -175,6 +175,7 @@ async function refresh(){
  try{
    const r=await fetch('/api/status',{headers:token()?{'X-AIPP-Panel-Token':token()}:{} });
    if(r.ok){
+     document.getElementById('authState').textContent='Panel bağlantısı hazır';
      const data=await r.json();
      document.getElementById('runtime').textContent=data.ok===false?'BAĞLANTI HATASI':'BAĞLI';
      if(!lastRunState){
@@ -182,8 +183,10 @@ async function refresh(){
        if(saved){lastRunState=saved;render(saved,false)}
        else render(data,false);
      }
+   }else if(r.status===401){
+     document.getElementById('authState').textContent='Panel token gerekiyor';
    }
- }catch(_){document.getElementById('runtime').textContent='BAĞLANTI SORUNU'}
+ }catch(_){document.getElementById('runtime').textContent='BAĞLANTI SORUNU';document.getElementById('authState').textContent='Bağlantı kontrol edilemedi'}
  finally{refreshBusy=false}
 }
 document.getElementById('panelToken').value=token();updateAuth();
