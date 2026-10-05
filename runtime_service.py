@@ -14,6 +14,7 @@ from aipp_drive_runtime import (
     find_project_boot,
     find_authority_log,
     read_file_text,
+    write_authority_approval,
     discover_task_candidates,
     get_credentials,
 )
@@ -214,6 +215,23 @@ def run():
             raise RuntimeError("HALT: max_attempts must be between 1 and 5")
 
         body.pop("_runtime_token", None)
+        if command == "APPROVE":
+            if not task:
+                raise RuntimeError("HALT: --task is required.")
+            token = get_access_token()
+            folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+            if not folder_id:
+                raise RuntimeError("HALT: GDRIVE_FOLDER_ID is empty")
+            validation_code, validation_payload, _, validation_stderr = _run_aipp("REQUEST_APPROVAL", task, max_attempts)
+            if validation_code != 0 or not validation_payload:
+                raise RuntimeError(validation_stderr or "HALT: approval request could not be validated")
+            future = validation_payload.get("task_lifecycle", {}).get("FUTURE", [])
+            pending_id = validation_payload.get("authority_gate", {}).get("pending_approval")
+            approved_task = next((item for item in future if item.get("id") == pending_id), None)
+            if not approved_task:
+                raise RuntimeError("HALT: approval target is not a current FUTURE proposal")
+            from datetime import datetime, timezone
+            write_authority_approval(token, folder_id, approved_task, datetime.now(timezone.utc).isoformat())
         code, payload, stdout, stderr = _run_aipp(command, task, max_attempts)
         return (
             jsonify(

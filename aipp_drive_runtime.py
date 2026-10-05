@@ -4,6 +4,7 @@ import re
 import zipfile
 import base64
 import copy
+import json
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -147,6 +148,28 @@ def find_authority_log(token, folder_id):
     file_info = files[0]
     print(f"DRIVE_AUTHORITY_LOG_FOUND id={file_info.get('id')} mimeType={file_info.get('mimeType')} modifiedTime={file_info.get('modifiedTime')}")
     return file_info
+
+
+def write_authority_approval(token, folder_id, task, timestamp):
+    """Record an explicit human approval in the canonical Drive Authority Log."""
+    from aipp_authority import parse_authority_log_text, proposal_id
+    pid = proposal_id(task)
+    info = find_authority_log(token, folder_id)
+    if info:
+        current = read_file_text(token, info) or ""
+        if any(row.get("proposal_id") == pid and row.get("task_id") == task.get("id") for row in parse_authority_log_text(current)):
+            return current
+        content = current.rstrip() + ("\n" if current.strip() else "# AUTHORITY_LOG\n\n| Proposal ID | Task ID | Decision | Timestamp | Note |\n| :--- | :--- | :--- | :--- | :--- |\n")
+        content += f"| {pid} | {task.get('id')} | APPROVED | {timestamp} | human |\n"
+        endpoint = f"https://www.googleapis.com/upload/drive/v3/files/{info.get('id')}?{urlencode({'uploadType': 'media', 'supportsAllDrives': 'true'})}"
+        _request(endpoint, method="PATCH", data=content.encode("utf-8"), token=token, content_type="text/markdown")
+        return content
+    metadata = json.dumps({"name": AUTHORITY_LOG, "parents": [folder_id], "mimeType": "text/markdown"}).encode("utf-8")
+    created = json.loads(_request(f"{DRIVE_API}/files?{urlencode({'supportsAllDrives': 'true'})}", method="POST", data=metadata, token=token, content_type="application/json"))
+    content = "# AUTHORITY_LOG\n\n| Proposal ID | Task ID | Decision | Timestamp | Note |\n| :--- | :--- | :--- | :--- | :--- |\n" + f"| {pid} | {task.get('id')} | APPROVED | {timestamp} | human |\n"
+    endpoint = f"https://www.googleapis.com/upload/drive/v3/files/{created['id']}?{urlencode({'uploadType': 'media', 'supportsAllDrives': 'true'})}"
+    _request(endpoint, method="PATCH", data=content.encode("utf-8"), token=token, content_type="text/markdown")
+    return content
 
 
 def _download_binary(token, file_id):
