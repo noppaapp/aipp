@@ -88,3 +88,16 @@ def test_actionable_proposal_preserves_source_type_and_exact_quote():
     assert evidence["quote"] in source
     assert "Next step" in evidence["quote"]
 
+
+
+def test_code_artifact_does_not_become_untracked_actionable_proposal():
+    result = analyze_documents([
+        {
+            "id": "zip-1",
+            "name": "AIPP_Runner_v1.0.zip",
+            "mimeType": "application/zip",
+            "text": "Next step: implement the runner and add the missing verification.",
+        },
+    ])
+    assert result["proposals"] == []
+    assert result["evidence"][0]["kind"] == "artifact"
