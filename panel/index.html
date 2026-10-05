@@ -22,7 +22,7 @@
 <div class="label">AIPP NE YAPTI?</div>
 <div class="grid">
 <div><div class="row"><span>Okunan belge</span><b id="docs">0</b></div><div class="row"><span>Bulgu</span><b id="findings">0</b></div></div>
-<div><div class="row"><span>Öneri</span><b id="proposals">0</b></div><div class="row"><span>Görev adayı</span><b id="candidates">0</b></div></div>
+<div><div class="row"><span>Öneri</span><b id="proposals">0</b></div><div class="row"><span>Bulunan TASK</span><b id="candidates">0</b></div></div>
 </div>
 <div class="notice" id="scanText" style="margin-top:12px"></div>
 </section>
@@ -109,6 +109,7 @@ function render(data, preserveRun=true){
    document.getElementById('proposalTitle').textContent=p.title||'Yeni öneri';
    document.getElementById('proposalDesc').textContent=p.description||p.proposal_reason||'AIPP bu işlemin yapılmasını öneriyor.';
    document.getElementById('meaning').textContent=meaningFor(p);
+   document.getElementById('approvalBtn').textContent=approvalLabel(p);
    const ev=p.source?.evidence||p.evidence||[];
    const box=document.getElementById('evidenceBox'), el=document.getElementById('evidence');
    box.classList.toggle('hidden',!ev.length);
@@ -126,7 +127,14 @@ function meaningFor(p){
  const action=(p.change_action||p.source?.action||'REVIEW').toUpperCase();
  if(action==='ADD')return 'AIPP yeni bir görev eklemeyi öneriyor.';
  if(action==='RECONCILE')return 'AIPP mevcut proje kayıtları arasında bir uyumsuzluğu düzeltmeyi öneriyor.';
- return 'AIPP önce bu konuyu incelemeyi öneriyor. Onay vermeden hiçbir değişiklik yapılmaz.';
+ return 'AIPP önce bu kaynağı incelemeyi öneriyor. Bu öneri tek başına dosyada değişiklik yapmaz.';
+}
+function approvalLabel(p){
+ const action=(p.change_action||p.source?.action||'REVIEW').toUpperCase();
+ if(action==='REVIEW')return 'İNCELEME ONAYI TALEP ET';
+ if(action==='RECONCILE')return 'DÜZELTME ONAYI TALEP ET';
+ if(action==='ADD')return 'GÖREV EKLEME ONAYI TALEP ET';
+ return 'ONAY TALEBİ OLUŞTUR';
 }
 function escapeHtml(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 async function run(command){
@@ -141,7 +149,7 @@ async function requestApproval(){
  if(!suggestedTask){alert('Onaylanacak görev bulunamadı.');return}
  const b=document.getElementById('approvalBtn');b.disabled=true;b.textContent='TALEP GÖNDERİLİYOR...';
  try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'REQUEST_APPROVAL',task:suggestedTask})});const data=await r.json();if(r.ok){saveRunState(data);render(data)}else document.getElementById('approvalText').textContent=data.error||'Onay talebi oluşturulamadı.'}
- finally{b.disabled=false;b.textContent='ONAY TALEBİ OLUŞTUR'}
+ finally{b.disabled=false;b.textContent=approvalLabel(normalizeState(loadRunState()||{}).task_lifecycle?.FUTURE?.[0]||{})}
 }
 let refreshBusy=false;
 async function refresh(){
