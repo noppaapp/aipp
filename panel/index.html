@@ -174,7 +174,7 @@ async function approveHuman(){
 }
 async function executeApproved(){
  const b=document.getElementById('executeBtn');b.disabled=true;b.textContent='UYGULANIYOR...';
- try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'EXECUTE'})});const data=await r.json();if(!r.ok){document.getElementById('approvalText').textContent=data.error||'Uygulama tamamlanamadı.';return}saveRunState(data);render(data)}catch(e){document.getElementById('approvalText').textContent='Uygulama sırasında bağlantı sorunu oluştu.'}finally{b.disabled=false;b.textContent='UYGULA'}
+ try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'EXECUTE_APPROVED',task:suggestedTask})});const data=await r.json();if(!r.ok){document.getElementById('approvalText').textContent=data.error||'Uygulama tamamlanamadı.';return}saveRunState(data);render(data)}catch(e){document.getElementById('approvalText').textContent='Uygulama sırasında bağlantı sorunu oluştu.'}finally{b.disabled=false;b.textContent='UYGULA'}
 }
 async function requestApproval(){
  if(!suggestedTask){alert('Onaylanacak görev bulunamadı.');return}

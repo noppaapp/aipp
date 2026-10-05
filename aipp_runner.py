@@ -361,6 +361,13 @@ def main():
         state = approve_task(state, args.task)
     elif command == "EXECUTE":
         state = execute_task(state, ".")
+    elif command == "EXECUTE_APPROVED":
+        if not args.task:
+            raise RuntimeError("HALT: --task is required.")
+        state = initialize_state(state, ".")
+        state = request_approval(state, args.task)
+        state = approve_task(state, args.task)
+        state = execute_task(state, ".")
     elif command == "VERIFY":
         state = verify_task(state, ".")
     elif command == "CONTINUE":
