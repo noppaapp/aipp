@@ -68,3 +68,23 @@ def test_classifies_canonical_protocol_and_reference():
         "AIPP.md": "protocol",
         "architecture.md": "reference",
     }
+
+def test_actionable_proposal_preserves_source_type_and_exact_quote():
+    source = "Next step: implement a verification panel."
+    result = analyze_documents([
+        {
+            "id": "pdf-1",
+            "name": "product-notes.pdf",
+            "mimeType": "application/pdf",
+            "text": source,
+        },
+    ])
+    proposal = next(p for p in result["proposals"] if p["finding_type"] == "actionable_untracked_idea")
+    evidence = proposal["evidence"][0]
+    assert evidence["file_name"] == "product-notes.pdf"
+    assert evidence["file_type"] == "PDF"
+    assert evidence["mime_type"] == "application/pdf"
+    assert evidence["source"] == "Google Drive"
+    assert evidence["quote"] in source
+    assert "Next step" in evidence["quote"]
+

@@ -73,8 +73,60 @@ def _parse_time(value):
         return None
 
 
-def _evidence(doc, reason, signal=None):
-    item = {"file_id": doc.get("id"), "file_name": doc.get("name"), "reason": reason}
+SOURCE_TYPE_BY_MIME = {
+    "application/pdf": "PDF",
+    "text/plain": "Text",
+    "text/markdown": "Markdown",
+    "text/x-markdown": "Markdown",
+    "text/csv": "CSV",
+    "application/json": "JSON",
+    "application/xml": "XML",
+    "application/x-yaml": "YAML",
+    "text/yaml": "YAML",
+    "application/zip": "ZIP",
+    "application/vnd.google-apps.document": "Google Docs",
+    "application/vnd.google-apps.spreadsheet": "Google Sheets",
+    "application/vnd.google-apps.presentation": "Google Slides",
+}
+
+
+def _source_type(doc):
+    mime = str(doc.get("mimeType") or "").strip()
+    if mime in SOURCE_TYPE_BY_MIME:
+        return SOURCE_TYPE_BY_MIME[mime]
+    name = str(doc.get("name") or "")
+    suffix = name.rsplit(".", 1)[-1].upper() if "." in name else ""
+    return suffix or "Unknown"
+
+
+def _excerpt(text, needle=None, max_chars=600):
+    normalized = str(text or "").strip()
+    if not normalized:
+        return ""
+    if needle:
+        match = re.search(re.escape(str(needle)), normalized, re.IGNORECASE)
+        if match:
+            start = max(0, match.start() - 180)
+            end = min(len(normalized), match.end() + 420)
+            return " ".join(normalized[start:end].split())[:max_chars]
+    for line in normalized.splitlines():
+        line = " ".join(line.split())
+        if line:
+            return line[:max_chars]
+    return normalized[:max_chars]
+
+
+def _evidence(doc, reason, signal=None, excerpt=None):
+    text = doc.get("text") or ""
+    item = {
+        "file_id": doc.get("id"),
+        "file_name": doc.get("name"),
+        "file_type": _source_type(doc),
+        "mime_type": doc.get("mimeType"),
+        "source": "Google Drive",
+        "reason": reason,
+        "quote": str(excerpt or _excerpt(text, signal)),
+    }
     if signal:
         item["signal"] = signal
     return item
@@ -176,7 +228,13 @@ def analyze_documents(documents):
         if task_ids:
             continue
         reason = "Actionable language found in workspace material without an existing TASK id."
-        evidence = [_evidence(doc, reason)]
+        action_match = ACTION_RE.search(text)
+        evidence = [_evidence(
+            doc,
+            reason,
+            signal=action_match.group(0) if action_match else None,
+            excerpt=_excerpt(text, action_match.group(0) if action_match else None),
+        )]
         findings.append({"type": "actionable_untracked_idea", "file_name": doc["name"], "evidence": evidence})
         proposals.append({
             "action": "REVIEW", "target": doc["name"], "reason": reason,
