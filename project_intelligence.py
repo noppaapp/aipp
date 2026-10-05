@@ -5,6 +5,7 @@ Evidence-first only. It never approves, executes, or mutates project content.
 import re
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 
 TASK_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 TABLE_TASK_RE = re.compile(
