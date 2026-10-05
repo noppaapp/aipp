@@ -1,212 +1,141 @@
 <!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AIPP Kontrol Paneli</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AIPP</title>
 <style>
-:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;--bg:#090d12;--card:#111820;--line:#26313c;--muted:#8f9cab;--text:#f2f6fa;--ok:#39d98a;--warn:#e6ad45}
-*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#090d12,#0d131a);color:var(--text)}
-main{max-width:760px;margin:auto;padding:24px 16px 48px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:22px}.title h1{margin:0 0 5px;font-size:28px;letter-spacing:-.02em}.muted{color:var(--muted);font-size:13px}.pill{padding:6px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px}
-.card{background:rgba(17,24,32,.94);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:14px;box-shadow:0 8px 30px rgba(0,0,0,.14)}.label{font-size:11px;letter-spacing:.09em;color:var(--muted);margin-bottom:9px}.state{font-size:25px;font-weight:760}.desc{line-height:1.6;margin-top:9px}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}button,input{padding:12px 14px;border:1px solid var(--line);border-radius:11px;background:#1b2530;color:var(--text)}button{cursor:pointer;font-weight:700}button.primary{background:#238636;border-color:#238636;min-height:46px}.big-action{width:100%;font-size:15px}button:disabled{opacity:.6}.hidden{display:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.row:last-child{border-bottom:0}.finding{padding:12px 0;border-bottom:1px solid var(--line)}.finding:last-child{border-bottom:0}.finding b{display:block;margin-bottom:4px}.proposal{border-left:3px solid var(--warn);padding-left:15px}.evidence{margin-top:14px;padding:13px;border:1px solid var(--line);border-radius:12px;background:#0d141b}.evidence code{display:block;white-space:pre-wrap;line-height:1.45}.notice{padding:13px;border-radius:12px;background:#0d161e;border:1px solid var(--line);line-height:1.55}details summary{cursor:pointer;color:var(--muted);font-size:13px}#panelAccess{margin-top:24px}@media(max-width:650px){.grid{grid-template-columns:1fr}.top{align-items:flex-start}.state{font-size:22px}main{padding-top:18px}.card{padding:18px}}
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;--card:#111821;--line:#26313d;--muted:#9aa6b2;--text:#f5f7fa;--ok:#3ddc97;--warn:#e6ad45;--danger:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#080c11,#0c1219);color:var(--text)}
+main{width:min(720px,100%);margin:auto;padding:20px 16px calc(44px + env(safe-area-inset-bottom))}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px}.title h1{margin:0;font-size:30px;letter-spacing:-.03em}.subtitle{color:var(--muted);margin-top:4px;font-size:14px}.pill{padding:7px 10px;border:1px solid var(--line);border-radius:999px;font-size:11px;color:var(--muted);white-space:nowrap}
+.card{background:rgba(17,24,33,.96);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:14px;box-shadow:0 10px 32px rgba(0,0,0,.15)}.hidden{display:none!important}
+.eyebrow{font-size:11px;letter-spacing:.1em;color:var(--muted);margin-bottom:8px;font-weight:700}.state{font-size:26px;font-weight:800;letter-spacing:-.02em}.desc{line-height:1.55;color:#dce3ea;margin-top:8px}
+.hero{padding:24px 20px}.hero .state{font-size:30px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}button{appearance:none;border:1px solid var(--line);border-radius:13px;background:#1a2430;color:var(--text);padding:13px 16px;min-height:46px;font-weight:800;cursor:pointer}button.primary{background:#238636;border-color:#238636}button.secondary{background:#18212b}.big{width:100%;font-size:16px}.choice{flex:1;min-width:130px}
+.callout{margin-top:16px;padding:14px;border-radius:14px;background:#0d151d;border:1px solid var(--line);line-height:1.55}.callout b{display:block;margin-bottom:4px}
+.proposal-title{font-size:21px;font-weight:800;line-height:1.25}.proposal-desc{margin-top:8px;line-height:1.55;color:#dce3ea}.why{margin-top:14px;padding:14px;border-left:3px solid var(--warn);background:#171711;border-radius:0 12px 12px 0;line-height:1.5}
+.metric{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}.metric:last-child{border-bottom:0}.metric span{color:var(--muted)}.metric b{font-weight:800}
+.success{border-color:#245a43}.success .state{color:var(--ok)}.error{border-color:#5b3030}.error .state{color:var(--danger)}
+details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px;padding:4px 0}code{display:block;white-space:pre-wrap;word-break:break-word;color:#b8c3ce;line-height:1.45;font-size:12px;margin-top:8px}
+input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;background:#0d141b;color:var(--text);margin-top:10px}.small{font-size:12px;color:var(--muted);line-height:1.45}
+@media(max-width:560px){main{padding-top:16px}.top{align-items:center}.pill{font-size:10px}.hero{padding:22px 18px}.state,.hero .state{font-size:24px}.proposal-title{font-size:19px}.actions{flex-direction:column}button,.choice{width:100%}}
 </style>
 </head>
 <body><main>
-<header class="top"><div class="title"><h1>AIPP</h1><div class="muted">Sen karar ver. AIPP gerisini yönet.</div></div><div class="pill" id="runtime">BAĞLANIYOR</div></header>
+<header class="top">
+<div class="title"><h1>AIPP</h1><div class="subtitle">Sen karar ver. AIPP gerisini yönet.</div></div>
+<div class="pill" id="runtime">BAĞLANIYOR</div>
+</header>
+
+<section class="card hero">
+<div class="eyebrow">ŞU AN</div>
+<div class="state" id="status">HAZIR</div>
+<div class="desc" id="summary">AIPP çalışma alanını incelemeye hazır.</div>
+<div class="actions"><button class="primary big" id="startBtn" onclick="run('BAŞLA')">BAŞLAT</button></div>
+</section>
+
+<section class="card hidden" id="decisionCard">
+<div class="eyebrow">SENİN KARARIN GEREKEN KONU</div>
+<div class="proposal-title" id="proposalTitle">—</div>
+<div class="proposal-desc" id="proposalDesc">—</div>
+<div class="why"><b>NEDEN SANA GÖSTERİLİYOR?</b><span id="meaning">—</span></div>
+<div class="actions"><button class="primary choice" id="reviewBtn" onclick="showReview()">İNCELE</button></div>
+</section>
+
+<section class="card hidden" id="reviewCard">
+<div class="eyebrow">İNCELEME</div>
+<div class="state">AIPP NE BULDU?</div>
+<div class="callout" id="reviewFinding">AIPP'nin bulduğu konu burada açıklanır.</div>
+<div class="eyebrow" style="margin-top:18px">AIPP NE ÖNERİYOR?</div>
+<div class="callout" id="reviewRecommendation">AIPP'nin önerisi burada açıklanır.</div>
+<div class="actions">
+<button class="primary choice" id="approveBtn" onclick="approveHuman()">ONAYLA</button>
+<button class="secondary choice" id="deferBtn" onclick="deferProposal()">ERTELE</button>
+</div>
+<div class="small" style="margin-top:12px">Onay vermeden gerçek uygulama başlatılmaz.</div>
+<details id="evidenceDetails" class="hidden"><summary>Kaynak ve teknik kanıt</summary><div id="evidence"></div></details>
+</section>
+
+<section class="card hidden" id="waitingCard">
+<div class="eyebrow">SENİN KARARIN</div><div class="state">KARARIN BEKLENİYOR</div>
+<div class="desc" id="waitingText">AIPP ilerlemek için senden onay bekliyor.</div>
+<div class="actions"><button class="primary big" onclick="showReview()">İNCELE</button></div>
+</section>
+
+<section class="card hidden" id="executeCard">
+<div class="eyebrow">ONAY VERİLDİ</div><div class="state">ONAY VERİLDİ</div>
+<div class="desc">Kararın kaydedildi. AIPP şimdi uygulama adımını bekliyor.</div>
+<div class="actions"><button class="primary big" id="executeBtn" onclick="executeApproved()">UYGULA</button></div>
+</section>
+
+<section class="card hidden" id="workingCard">
+<div class="eyebrow">ŞU AN</div><div class="state">UYGULANIYOR</div>
+<div class="desc">AIPP işlemi gerçekleştiriyor. Bu sırada tekrar işlem başlatmana gerek yok.</div>
+</section>
+
+<section class="card hidden success" id="doneCard">
+<div class="eyebrow">SONUÇ</div><div class="state">TAMAMLANDI</div>
+<div class="desc" id="doneText">İşlem tamamlandı ve doğrulandı.</div>
+</section>
+
+<section class="card hidden error" id="errorCard">
+<div class="eyebrow">DURUM</div><div class="state">BİR SORUN OLUŞTU</div>
+<div class="desc" id="errorText">AIPP işlemi tamamlayamadı.</div>
+<div class="actions"><button class="secondary" onclick="refresh()">TEKRAR KONTROL ET</button></div>
+</section>
+
+<section class="card hidden" id="activityCard">
+<div class="eyebrow">AIPP NE YAPTI?</div>
+<div class="metric"><span>İncelenen belge</span><b id="docs">0</b></div>
+<div class="metric"><span>Bulgu</span><b id="findings">0</b></div>
+<div class="metric"><span>Bekleyen konu</span><b id="pendingCount">0</b></div>
+<div class="metric"><span>Tamamlanan</span><b id="completed">0</b></div>
+<div class="small" id="scanText" style="margin-top:12px"></div>
+</section>
 
 <section class="card">
-<div class="label">ŞU AN</div>
-<div class="state" id="status">Hazırlanıyor</div>
-<div class="desc" id="summary">AIPP hazır. Başlatıldığında çalışma alanını inceler ve yalnızca gerektiğinde senden karar ister.</div>
-<div class="actions"><button class="primary big-action" id="startBtn" onclick="run('BAŞLA')">BAŞLAT</button></div>
-</section>
-
-<section class="card hidden" id="scanCard">
-<div class="label">AIPP NE YAPTI?</div>
-<div class="grid">
-<div><div class="row"><span>İncelenen belge</span><b id="docs">0</b></div><div class="row"><span>Bulgu</span><b id="findings">0</b></div></div>
-<div><div class="row"><span>Öneri</span><b id="proposals">0</b></div><div class="row"><span>Bulunan görev</span><b id="candidates">0</b></div></div>
-</div>
-<div class="notice" id="scanText" style="margin-top:12px"></div>
-</section>
-
-<section class="card hidden" id="proposalCard">
-<div class="label">SENİN KARARIN GEREKEN KONU</div>
-<div class="proposal">
-<div class="state" id="proposalTitle">—</div>
-<div class="desc" id="proposalDesc">—</div>
-</div>
-<div class="evidence hidden" id="evidenceBox"><div class="label">İNCELEDİĞİ KAYNAK VE KANIT</div><div id="evidence"></div></div>
-<div class="notice" style="margin-top:12px"><b>Bu ne demek?</b><div id="meaning" style="margin-top:5px"></div></div>
-<div class="actions"><button class="primary" id="approvalBtn" onclick="requestApproval()">ONAY TALEBİ OLUŞTUR</button></div>
-</section>
-
-<section class="card hidden" id="findingsCard">
-<div class="label">AIPP'NİN BULDUĞU ŞEYLER</div>
-<div id="findingList"></div>
-</section>
-
-<section class="card">
-<div class="label">DURUM</div>
-<div class="grid">
-<div><div class="row"><span>Şimdi</span><b id="task">Bekliyor</b></div><div class="row"><span>Sonuç</span><b id="taskStatus">—</b></div></div>
-<div><div class="row"><span>Bekleyen öneri</span><b id="future">0</b></div><div class="row"><span>Tamamlanan</span><b id="completed">0</b></div></div>
-</div>
-</section>
-
-<section class="card hidden" id="approvalCard">
-<div class="label">SENİN ONAYIN</div>
-<div class="state" id="approvalTitle">Senden onay bekleniyor</div>
-<div class="desc" id="approvalText"></div>
-<div class="actions"><button class="primary" id="approveBtn" onclick="approveHuman()">ONAYLA VE DEVAM ET</button><button class="primary hidden" id="executeBtn" onclick="executeApproved()">UYGULA</button></div>
-</section>
-
-<section class="card" id="panelAccess">
-<details><summary>Teknik bağlantı ayarları</summary><div class="label" style="margin-top:14px">PANEL ERİŞİMİ</div>
-<div class="actions"><input id="panelToken" type="password" placeholder="Panel token" autocomplete="off"><button onclick="saveToken()">KAYDET</button></div>
-<div class="muted" id="authState" style="margin-top:8px">Token bekleniyor</div></details>
+<details>
+<summary>Teknik ayrıntılar</summary>
+<div class="small" style="margin-top:10px">Bağlantı ve teknik kanıt yalnızca gerektiğinde burada gösterilir.</div>
+<details><summary>Panel bağlantısı</summary>
+<input id="panelToken" type="password" placeholder="Panel token" autocomplete="off">
+<div class="actions"><button onclick="saveToken()">KAYDET</button></div>
+<div class="small" id="authState">Bağlantı kontrol ediliyor</div>
+</details>
+</details>
 </section>
 
 <script>
 function token(){return localStorage.getItem('aipp_panel_token')||''}
 function saveToken(){const v=document.getElementById('panelToken').value.trim();if(v)localStorage.setItem('aipp_panel_token',v);updateAuth();refresh()}
-function updateAuth(){document.getElementById('authState').textContent=token()?'Panel bağlantısı hazır':'Bağlantı kontrol ediliyor'}
+function updateAuth(){document.getElementById('authState').textContent=token()?'Panel bağlantısı hazır':'Panel bağlantısı kontrol ediliyor'}
 function headers(){const h={'Content-Type':'application/json'};if(token())h['X-AIPP-Panel-Token']=token();return h}
-let suggestedTask='';
-function normalizeState(data){
- if(data&&data.result&&typeof data.result==='object')return data.result;
- if(data&&data.stdout){try{return JSON.parse(data.stdout.split(/\\r?\\n/).filter(Boolean).pop())}catch(_){}}
- return data||{};
-}
-let lastRunState=null;
-function saveRunState(data){
- try{sessionStorage.setItem('aipp_last_run_state',JSON.stringify(data));}catch(_){}
-}
-function loadRunState(){
- try{const v=sessionStorage.getItem('aipp_last_run_state');return v?JSON.parse(v):null}catch(_){return null}
-}
-function render(data, preserveRun=true){
- const s=normalizeState(data);
- const l=s.task_lifecycle||{}, g=s.authority_gate||{}, now=l.NOW, future=l.FUTURE||[];
- const intel=s.project_intelligence||{};
- const p=future[0];
- suggestedTask=p?.id||'';
- if(preserveRun && (s.project_intelligence || p || s.status==='PROPOSAL_READY')) lastRunState=data;
- document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':'BAĞLI';
- document.getElementById('status').textContent=s.status==='PROPOSAL_READY'?'ÖNERİ HAZIR':(s.status||'HAZIR');
- document.getElementById('summary').textContent=p?'AIPP çalışma alanını inceledi. Şimdi senden gereken kararı gösteriyor.':'AIPP şu anda senden bir karar istemiyor.';
- document.getElementById('task').textContent=now?(now.status==='AWAITING_AUTHORITY'?'Senden onay bekliyor':'Çalışıyor'):'Bekliyor';
- document.getElementById('taskStatus').textContent=now?(now.status==='AWAITING_AUTHORITY'?'Henüz değişiklik yok':'Devam ediyor'):'—';
- document.getElementById('future').textContent=p?'1':'0';
- document.getElementById('completed').textContent=(l.COMPLETED||[]).length;
- const scanVisible=Object.keys(intel).length>0;
- document.getElementById('scanCard').classList.toggle('hidden',!scanVisible);
- if(scanVisible){
-   document.getElementById('docs').textContent=intel.documents_scanned??0;
-   document.getElementById('findings').textContent=intel.finding_count??0;
-   document.getElementById('proposals').textContent=intel.proposal_count??0;
-   document.getElementById('candidates').textContent=(s.discovered_task_count??s.candidate_count??0);
-   document.getElementById('scanText').textContent=intel.semantic?.available?'AI analizi çalıştı ve sonucu kanıt kontrolünden geçirildi.':'Belge taraması yapıldı. AI analizi bu çalışmada kullanılmadı veya kullanılamadı.';
- }
- document.getElementById('proposalCard').classList.toggle('hidden',!p);
- if(p){
-   document.getElementById('proposalTitle').textContent=p.title||'Yeni öneri';
-   document.getElementById('proposalDesc').textContent=proposalDescFor(p);
-   document.getElementById('meaning').textContent=meaningFor(p);
-   const pendingApproval=g.pending_approval;
-document.getElementById('approvalBtn').textContent=pendingApproval===p.id?'ONAY TALEBİ GÖNDERİLDİ':approvalLabel(p);
-document.getElementById('approvalBtn').disabled=pendingApproval===p.id;
-   const ev=p.source?.evidence||p.evidence||[];
-   const box=document.getElementById('evidenceBox'), el=document.getElementById('evidence');
-   box.classList.toggle('hidden',!ev.length);
-   el.innerHTML=ev.map(x=>'<div style="margin-bottom:14px"><b>'+escapeHtml(x.file_name||'Belge')+'</b><div class="muted" style="margin:4px 0 8px">Tür: '+escapeHtml(x.file_type||x.mime_type||'Bilinmiyor')+' · Kaynak: '+escapeHtml(x.source||'Google Drive')+'</div><div class="muted" style="margin-bottom:5px">AIPP bu kaynağın içeriğini bu bulgu için kullandı.</div><details><summary>Teknik kanıtı göster</summary><code>'+escapeHtml(x.quote||'Kanıt alıntısı bulunamadı.')+'</code></details></div>').join('');
- }
- const pending=g.pending_approval;
- const nowApproved=now && ['APPROVED','NOW'].includes(now.status);
- document.getElementById('approvalCard').classList.toggle('hidden',!pending && !nowApproved);
- document.getElementById('approveBtn').classList.toggle('hidden',!pending);
- document.getElementById('executeBtn').classList.toggle('hidden',!nowApproved);
- if(pending){document.getElementById('approvalTitle').textContent='Senden onay bekleniyor';document.getElementById('approvalText').textContent='AIPP bir sonraki adım için senden açık onay bekliyor. <b>Sen onay vermeden hiçbir değişiklik yapılmaz.</b>';}
- if(nowApproved){document.getElementById('approvalTitle').textContent='Onay verildi';document.getElementById('approvalText').textContent='Onayın kaydedildi. AIPP artık yalnızca senin başlatacağın uygulama adımını bekliyor.';};
- const findings=s.project_intelligence_findings||[];
- const fc=document.getElementById('findingsCard');
- fc.classList.toggle('hidden',!findings.length);
- document.getElementById('findingList').innerHTML=findings.map(x=>'<div class="finding"><b>'+escapeHtml(x.type||'Bulgu')+'</b><div>'+escapeHtml(x.claim||'')+'</div></div>').join('');
-}
-function proposalTitleFor(p){
- const action=(p.change_action||p.source?.action||'REVIEW').toUpperCase();
- const target=p.source?.target||p.target||'bu kaynağı';
- if(action==='REVIEW')return 'İnceleme önerisi: '+target;
- if(action==='RECONCILE')return 'Düzeltme önerisi: '+target;
- if(action==='ADD')return 'Görev önerisi: '+target;
- return 'AIPP önerisi: '+target;
-}
-function proposalDescFor(p){
- const action=(p.change_action||p.source?.action||'REVIEW').toUpperCase();
- if(action==='REVIEW')return 'AIPP çalışma alanında incelenmesi gereken bir içerik buldu. Önce inceleme yapılması öneriliyor.';
- if(action==='RECONCILE')return 'AIPP mevcut kayıtlar arasında düzeltilmesi gereken bir uyumsuzluk buldu.';
- if(action==='ADD')return 'AIPP çalışma alanında ayrı bir görev olarak ele alınması gereken bir iş buldu.';
- return 'AIPP bu işlemin yapılmasını öneriyor.';
-}
-function meaningFor(p){
- const action=(p.change_action||p.source?.action||'REVIEW').toUpperCase();
- if(action==='ADD')return 'AIPP yeni bir görev eklemeyi öneriyor.';
- if(action==='RECONCILE')return 'AIPP mevcut proje kayıtları arasında bir uyumsuzluğu düzeltmeyi öneriyor.';
- return 'AIPP önce bu kaynağı incelemeyi öneriyor. Bu öneri tek başına dosyada değişiklik yapmaz.';
-}
-function approvalLabel(p){
- const action=(p.change_action||p.source?.action||'REVIEW').toUpperCase();
- if(action==='REVIEW')return 'İNCELEME ONAYI TALEP ET';
- if(action==='RECONCILE')return 'DÜZELTME ONAYI TALEP ET';
- if(action==='ADD')return 'GÖREV EKLEME ONAYI TALEP ET';
- return 'ONAY TALEBİ OLUŞTUR';
-}
+let suggestedTask='',currentProposal=null,lastRunState=null;
+function normalizeState(data){if(data&&data.result&&typeof data.result==='object')return data.result;if(data&&data.stdout){try{return JSON.parse(data.stdout.split(/\r?\n/).filter(Boolean).pop())}catch(_){}}return data||{}}
+function saveRunState(data){try{sessionStorage.setItem('aipp_last_run_state',JSON.stringify(data))}catch(_){}}
+function loadRunState(){try{const v=sessionStorage.getItem('aipp_last_run_state');return v?JSON.parse(v):null}catch(_){return null}}
 function escapeHtml(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-async function run(command){
- const b=document.getElementById('startBtn');b.disabled=true;b.textContent='ÇALIŞIYOR...';
- document.getElementById('status').textContent='TARANIYOR';
- document.getElementById('summary').textContent='AIPP Drive belgelerini okuyor ve öneriyi kanıtla kontrol ediyor.';
- try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command})});const data=await r.json();if(!r.ok){document.getElementById('status').textContent='HATA';document.getElementById('summary').textContent=data.error||'İşlem tamamlanamadı.';return}saveRunState(data);render(data)}
- catch(e){document.getElementById('status').textContent='BAĞLANTI SORUNU';document.getElementById('summary').textContent='Panel AIPP Runtime ile iletişim kuramadı.'}
- finally{b.disabled=false;b.textContent='BAŞLAT'}
-}
-async function approveHuman(){
- if(!suggestedTask)return;
- const b=document.getElementById('approveBtn');b.disabled=true;b.textContent='ONAY KAYDEDİLİYOR...';
- try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'APPROVE',task:suggestedTask})});const data=await r.json();if(!r.ok){document.getElementById('approvalText').textContent=data.error||'Onay kaydedilemedi.';return}saveRunState(data);render(data)}catch(e){document.getElementById('approvalText').textContent='Onay işlemi sırasında bağlantı sorunu oluştu.'}finally{b.disabled=false;b.textContent='ONAYLA VE DEVAM ET'}
-}
-async function executeApproved(){
- const b=document.getElementById('executeBtn');b.disabled=true;b.textContent='UYGULANIYOR...';
- try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'EXECUTE_APPROVED',task:suggestedTask})});const data=await r.json();if(!r.ok){document.getElementById('approvalText').textContent=data.error||'Uygulama tamamlanamadı.';return}saveRunState(data);render(data)}catch(e){document.getElementById('approvalText').textContent='Uygulama sırasında bağlantı sorunu oluştu.'}finally{b.disabled=false;b.textContent='UYGULA'}
-}
-async function requestApproval(){
- if(!suggestedTask){alert('Onaylanacak görev bulunamadı.');return}
- const b=document.getElementById('approvalBtn');b.disabled=true;b.textContent='TALEP GÖNDERİLİYOR...';
- try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'REQUEST_APPROVAL',task:suggestedTask})});const data=await r.json();if(r.ok){saveRunState(data);render(data)}else document.getElementById('approvalText').textContent=data.error||'Onay talebi oluşturulamadı.'}
- finally{b.disabled=false;b.textContent=approvalLabel(normalizeState(loadRunState()||{}).task_lifecycle?.FUTURE?.[0]||{})}
-}
+function getProposal(s){return (s.task_lifecycle?.FUTURE||[])[0]||null}
+function setVisible(id,on){document.getElementById(id).classList.toggle('hidden',!on)}
+function hideFlow(){['decisionCard','reviewCard','waitingCard','executeCard','workingCard','doneCard','errorCard'].forEach(id=>setVisible(id,false))}
+function showReview(){if(!currentProposal)return;setVisible('decisionCard',false);setVisible('waitingCard',false);setVisible('reviewCard',true);document.getElementById('reviewFinding').textContent=currentProposal.description||currentProposal.reason||'AIPP çalışma alanında bu konu bulundu.';document.getElementById('reviewRecommendation').textContent=currentProposal.recommendation||currentProposal.reason||'AIPP bu konunun ele alınmasını öneriyor.';renderEvidence(currentProposal)}
+function renderEvidence(p){const ev=p?.source?.evidence||p?.evidence||[];const d=document.getElementById('evidenceDetails');d.classList.toggle('hidden',!ev.length);document.getElementById('evidence').innerHTML=ev.map(x=>'<div class="small" style="margin-top:10px"><b>'+escapeHtml(x.file_name||'Belge')+'</b><br>Kaynak: '+escapeHtml(x.source||'Google Drive')+'<details><summary>Kanıt alıntısı</summary><code>'+escapeHtml(x.quote||'Kanıt alıntısı bulunamadı.')+'</code></details></div>').join('')}
+function render(data){const s=normalizeState(data);lastRunState=data;const l=s.task_lifecycle||{},g=s.authority_gate||{},now=l.NOW,p=getProposal(s),intel=s.project_intelligence||{};currentProposal=p;suggestedTask=p?.id||now?.id||'';document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':'BAĞLI';hideFlow();
+const status=String(s.status||'').toUpperCase(),pending=g.pending_approval,approved=now&&['APPROVED','NOW'].includes(String(now.status).toUpperCase()),completed=(l.COMPLETED||[]).length>0||['COMPLETED','VERIFIED','DONE','SUCCESS'].includes(status);
+if(s.ok===false){setVisible('errorCard',true);document.getElementById('errorText').textContent=s.error||'AIPP Runtime ile bağlantı kurulamadı.';return}
+if(completed&&!pending&&!approved){document.getElementById('status').textContent='TAMAMLANDI';document.getElementById('summary').textContent='İşlem tamamlandı ve doğrulandı.';setVisible('doneCard',true);return}
+if(approved){document.getElementById('status').textContent='ONAY VERİLDİ';document.getElementById('summary').textContent='Kararın kaydedildi. AIPP uygulama adımını bekliyor.';setVisible('executeCard',true);return}
+if(pending){document.getElementById('status').textContent='KARARIN BEKLENİYOR';document.getElementById('summary').textContent='AIPP ilerlemek için senden açık onay bekliyor.';setVisible('waitingCard',true);document.getElementById('waitingText').textContent=p?'AIPP şu konuyu senin kararına sundu: '+(p.title||'öneri'):'AIPP bir sonraki adım için senden onay bekliyor.';return}
+if(p){document.getElementById('status').textContent='KARAR GEREKİYOR';document.getElementById('summary').textContent='AIPP çalışma alanını inceledi ve karar vermen gereken bir konu buldu.';document.getElementById('proposalTitle').textContent=p.title||p.source?.target||'İncelenecek konu';document.getElementById('proposalDesc').textContent=p.description||p.reason||'AIPP çalışma alanında incelenmesi gereken bir içerik bulundu.';document.getElementById('meaning').textContent=p.recommendation||'AIPP önce bu konunun incelenmesini öneriyor. Bu ekran tek başına dosyada değişiklik yapmaz.';setVisible('decisionCard',true);return}
+if(['RUNNING','EXECUTING','IN_PROGRESS'].includes(status)){document.getElementById('status').textContent='UYGULANIYOR';document.getElementById('summary').textContent='AIPP işlemi gerçekleştiriyor.';setVisible('workingCard',true);return}
+document.getElementById('status').textContent='HAZIR';document.getElementById('summary').textContent='AIPP çalışma alanını incelemeye hazır.';updateActivity(s)}
+function updateActivity(s){const i=s.project_intelligence||{};const has=Object.keys(i).length>0;setVisible('activityCard',has);if(!has)return;document.getElementById('docs').textContent=i.documents_scanned??0;document.getElementById('findings').textContent=i.finding_count??0;document.getElementById('pendingCount').textContent=(s.task_lifecycle?.FUTURE||[]).length;document.getElementById('completed').textContent=(s.task_lifecycle?.COMPLETED||[]).length;document.getElementById('scanText').textContent=i.semantic?.available?'Belgeler incelendi ve sonuçlar kanıtla kontrol edildi.':'Belgeler incelendi.'}
+async function run(command){const b=document.getElementById('startBtn');b.disabled=true;b.textContent='İNCELEME SÜRÜYOR...';document.getElementById('status').textContent='İNCELEME';document.getElementById('summary').textContent='AIPP çalışma alanını inceliyor.';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command})});const data=await r.json();if(!r.ok)throw new Error(data.error||'İşlem tamamlanamadı.');saveRunState(data);render(data)}catch(e){setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message||'İşlem tamamlanamadı.'}finally{b.disabled=false;b.textContent='BAŞLAT'}}
+async function requestApproval(){if(!suggestedTask)return;showReview()}
+async function approveHuman(){if(!suggestedTask)return;const b=document.getElementById('approveBtn');b.disabled=true;b.textContent='KAYDEDİLİYOR...';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'APPROVE',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Onay kaydedilemedi.');saveRunState(data);render(data)}catch(e){setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message}finally{b.disabled=false;b.textContent='ONAYLA'}}
+async function deferProposal(){if(!suggestedTask)return;const b=document.getElementById('deferBtn');b.disabled=true;b.textContent='KAYDEDİLİYOR...';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'DEFER',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Erteleme şu anda kullanılamıyor.');saveRunState(data);render(data)}catch(e){setVisible('errorCard',true);document.getElementById('errorText').textContent='Erteleme bu sürümde kullanılamıyor: '+e.message}finally{b.disabled=false;b.textContent='ERTELE'}}
+async function executeApproved(){const b=document.getElementById('executeBtn');b.disabled=true;b.textContent='UYGULANIYOR...';setVisible('executeCard',false);setVisible('workingCard',true);document.getElementById('status').textContent='UYGULANIYOR';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'EXECUTE_APPROVED',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Uygulama tamamlanamadı.');saveRunState(data);render(data)}catch(e){setVisible('workingCard',false);setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message||'Uygulama tamamlanamadı.'}finally{b.disabled=false;b.textContent='UYGULA'}}
 let refreshBusy=false;
-async function refresh(){
- if(refreshBusy)return;
- refreshBusy=true;
- try{
-   const r=await fetch('/api/status',{headers:token()?{'X-AIPP-Panel-Token':token()}:{} });
-   if(r.ok){
-     document.getElementById('authState').textContent='Panel bağlantısı hazır';
-     const data=await r.json();
-     document.getElementById('runtime').textContent=data.ok===false?'BAĞLANTI HATASI':'BAĞLI';
-     if(!lastRunState){
-       const saved=loadRunState();
-       if(saved){lastRunState=saved;render(saved,false)}
-       else render(data,false);
-     }
-   }else if(r.status===401){
-     document.getElementById('authState').textContent='Panel token gerekiyor';
-   }
- }catch(_){document.getElementById('runtime').textContent='BAĞLANTI SORUNU';document.getElementById('authState').textContent='Bağlantı kontrol edilemedi'}
- finally{refreshBusy=false}
-}
-document.getElementById('panelToken').value=token();updateAuth();
-const savedRun=loadRunState();
-if(savedRun){lastRunState=savedRun;render(savedRun,false)}
-refresh();setInterval(refresh,30000);
+async function refresh(){if(refreshBusy)return;refreshBusy=true;try{const r=await fetch('/api/status',{headers:token()?{'X-AIPP-Panel-Token':token()}:{} });if(r.status===401){document.getElementById('runtime').textContent='GİRİŞ GEREKİYOR';document.getElementById('authState').textContent='Panel token gerekiyor';return}if(!r.ok)throw new Error();const data=await r.json();document.getElementById('runtime').textContent=data.ok===false?'BAĞLANTI HATASI':'BAĞLI';if(!lastRunState){const saved=loadRunState();if(saved){lastRunState=saved;render(saved)}else render(data)}}catch(_){document.getElementById('runtime').textContent='BAĞLANTI SORUNU'}finally{refreshBusy=false}}
+document.getElementById('panelToken').value=token();updateAuth();const saved=loadRunState();if(saved){lastRunState=saved;render(saved)}refresh();setInterval(refresh,30000);
 </script></body></html>
