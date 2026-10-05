@@ -24,6 +24,7 @@ KIND_WORDS = {
     "historical": ("history", "histor", "archive", "changelog", "decision", "decision-log", "record"),
     "idea": ("idea", "ideas", "note", "notes", "proposal", "brainstorm", "draft", "backlog"),
 }
+ARTIFACT_EXTENSIONS = {".zip", ".py", ".js", ".ts", ".toml", ".yaml", ".yml", ".json", ".xml", ".csv"}
 CANONICAL = {"PROJECT_BOOT.md": "project_state", "AIPP.md": "protocol"}
 
 
@@ -31,6 +32,9 @@ def _kind(name, text):
     if name in CANONICAL:
         return CANONICAL[name]
     lower = name.lower()
+    suffix = Path(name).suffix.lower()
+    if suffix in ARTIFACT_EXTENSIONS:
+        return "artifact"
     for kind, words in KIND_WORDS.items():
         if any(word in lower for word in words):
             return kind
