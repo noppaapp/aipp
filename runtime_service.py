@@ -70,7 +70,7 @@ def _oauth_client_fingerprint():
         return "INVALID_OR_MISSING"
 
 
-def _drive_context():
+def _drive_context(include_ai=True):
     token = get_access_token()
     folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
     if not folder_id:
@@ -92,12 +92,15 @@ def _drive_context():
 
     candidates, documents = discover_task_candidates(token, folder_id, include_documents=True)
     intelligence = analyze_documents(documents)
-    semantic = analyze_with_ai(documents)
-    intelligence["semantic"] = semantic
-    if semantic.get("available"):
-        intelligence["proposals"].extend(semantic.get("proposals", []))
-        intelligence["findings"].extend(semantic.get("findings", []))
-        intelligence["proposals"].sort(key=lambda p: (str(p.get("finding_type", "")), str(p.get("target", "")), str(p.get("action", ""))))
+    if include_ai:
+        semantic = analyze_with_ai(documents)
+        intelligence["semantic"] = semantic
+        if semantic.get("available"):
+            intelligence["proposals"].extend(semantic.get("proposals", []))
+            intelligence["findings"].extend(semantic.get("findings", []))
+            intelligence["proposals"].sort(key=lambda p: (str(p.get("finding_type", "")), str(p.get("target", "")), str(p.get("action", ""))))
+    else:
+        intelligence["semantic"] = {"enabled": False, "available": False, "reason": "status endpoint does not run AI"}
     return boot_text, authority_text, candidates, intelligence
 
 
@@ -165,7 +168,7 @@ def status():
     if auth_error:
         return auth_error
     try:
-        boot, authority, candidates, intelligence = _drive_context()
+        boot, authority, candidates, intelligence = _drive_context(include_ai=False)
         return jsonify(
             {
                 "ok": True,
