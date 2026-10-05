@@ -78,11 +78,18 @@ def _validate(result, documents):
     return {"proposals": clean, "findings": result.get("findings", [])}
 
 
+def _telemetry(**fields):
+    safe = " ".join(f"{key}={str(value).replace(chr(10), " ").replace(chr(13), " ")}" for key, value in fields.items())
+    print(f"AIPP_AI_SEMANTIC {safe}", flush=True)
+
+
 def analyze_with_ai(documents):
     """Return validated AI proposals, or an explicit unavailable result."""
     if os.environ.get("AIPP_SEMANTIC_ANALYSIS", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        _telemetry(enabled=False, available=False, reason="semantic_analysis_disabled")
         return {"enabled": False, "available": False, "reason": "semantic analysis disabled"}
     if not documents:
+        _telemetry(enabled=True, available=False, reason="no_readable_documents")
         return {"enabled": True, "available": False, "reason": "no readable documents"}
 
     prompt = (
@@ -105,16 +112,32 @@ def analyze_with_ai(documents):
         }
         registry = tuple(model for model in DEFAULT_MODELS if enabled.get(model.provider, False))
         if not registry:
+            _telemetry(enabled=True, available=False, provider="NONE", reason="no_configured_provider_key")
             return {"enabled": True, "available": False, "reason": "No configured AI provider key"}
         provider = max(registry, key=lambda model: model.priority).provider
         selected = execute(task, configured_adapter(provider), registry=registry)
         validated = _validate(selected.output, documents)
     except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
+        _telemetry(
+            enabled=True,
+            available=False,
+            provider=provider if "provider" in locals() else "NONE",
+            error_type=type(exc).__name__,
+            reason=str(exc),
+        )
         return {
             "enabled": True,
             "available": False,
             "reason": f"semantic analysis unavailable: {exc}",
         }
+    _telemetry(
+        enabled=True,
+        available=True,
+        provider=selected.provider,
+        model=selected.model,
+        findings=len(validated["findings"]),
+        proposals=len(validated["proposals"]),
+    )
     return {
         "enabled": True,
         "available": True,
