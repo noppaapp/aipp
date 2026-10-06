@@ -49,7 +49,7 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
 <div class="eyebrow" style="margin-top:18px">AIPP NE ÖNERİYOR?</div>
 <div class="callout" id="reviewRecommendation">AIPP'nin önerisi burada açıklanır.</div><div class="eyebrow" style="margin-top:18px">ONAYDAN SONRA NE YAPILACAK?</div><div class="callout" id="reviewNextAction">AIPP'nin gerçekleştireceği aksiyon burada açıklanır.</div>
 <div class="actions">
-<button class="primary choice" id="approveBtn" onclick="approveHuman()">ONAYLA</button>
+<button class="primary choice" id="requestApprovalBtn" onclick="requestApproval()">KARARIMI SUN</button>
 
 </div>
 <div class="small" style="margin-top:12px">Onay vermeden gerçek uygulama başlatılmaz.</div>
@@ -59,7 +59,7 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
 <section class="card hidden" id="waitingCard">
 <div class="eyebrow">SENİN KARARIN</div><div class="state">KARARIN BEKLENİYOR</div>
 <div class="desc" id="waitingText">AIPP ilerlemek için senden onay bekliyor.</div>
-<div class="actions"><button class="primary big" onclick="showReview()">İNCELE</button></div>
+<div class="actions"><button class="secondary choice" onclick="showReview()">İNCELE</button><button class="primary choice" onclick="approveHuman()">ONAYLA</button></div>
 </section>
 
 <section class="card hidden" id="executeCard">
@@ -131,7 +131,22 @@ if(['RUNNING','EXECUTING','IN_PROGRESS'].includes(status)){document.getElementBy
 document.getElementById('status').textContent='HAZIR';document.getElementById('summary').textContent='AIPP çalışma alanını incelemeye hazır.';updateActivity(s)}
 function updateActivity(s){const i=s.project_intelligence||{};const has=Object.keys(i).length>0;setVisible('activityCard',has);if(!has)return;document.getElementById('docs').textContent=i.documents_scanned??0;document.getElementById('findings').textContent=i.finding_count??0;document.getElementById('pendingCount').textContent=(s.task_lifecycle?.FUTURE||[]).length;document.getElementById('completed').textContent=(s.task_lifecycle?.COMPLETED||[]).length;document.getElementById('scanText').textContent=i.semantic?.available?'Belgeler incelendi ve sonuçlar kanıtla kontrol edildi.':'Belgeler incelendi.'}
 async function run(command){const b=document.getElementById('startBtn');b.disabled=true;b.textContent='İNCELEME SÜRÜYOR...';document.getElementById('status').textContent='İNCELEME';document.getElementById('summary').textContent='AIPP çalışma alanını inceliyor.';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command})});const data=await r.json();if(!r.ok)throw new Error(data.error||'İşlem tamamlanamadı.');saveRunState(data);render(data)}catch(e){setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message||'İşlem tamamlanamadı.'}finally{b.disabled=false;b.textContent='BAŞLAT'}}
-async function requestApproval(){if(!suggestedTask)return;showReview()}
+async function requestApproval(){
+  if(!suggestedTask)return;
+  const b=document.getElementById('requestApprovalBtn');
+  if(b){b.disabled=true;b.textContent='KAYDEDİLİYOR...'}
+  try{
+    const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'REQUEST_APPROVAL',task:suggestedTask})});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error||'Karar isteği kaydedilemedi.');
+    saveRunState(data);render(data);
+  }catch(e){
+    setVisible('errorCard',true);
+    document.getElementById('errorText').textContent=e.message||'Karar isteği kaydedilemedi.';
+  }finally{
+    if(b){b.disabled=false;b.textContent='KARARIMI SUN'}
+  }
+}
 async function approveHuman(){if(!suggestedTask)return;const b=document.getElementById('approveBtn');b.disabled=true;b.textContent='KAYDEDİLİYOR...';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'APPROVE',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Onay kaydedilemedi.');saveRunState(data);render(data)}catch(e){setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message}finally{b.disabled=false;b.textContent='ONAYLA'}}
 
 async function executeApproved(){const b=document.getElementById('executeBtn');b.disabled=true;b.textContent='UYGULANIYOR...';setVisible('executeCard',false);setVisible('workingCard',true);document.getElementById('status').textContent='UYGULANIYOR';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'EXECUTE_APPROVED',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Uygulama tamamlanamadı.');saveRunState(data);render(data)}catch(e){setVisible('workingCard',false);setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message||'Uygulama tamamlanamadı.'}finally{b.disabled=false;b.textContent='UYGULA'}}
