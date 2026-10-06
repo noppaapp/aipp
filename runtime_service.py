@@ -123,7 +123,7 @@ def _drive_context(include_ai=True):
     return boot_text, authority_text, candidates, intelligence
 
 
-def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persisted_state=False):
+def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persisted_state=False, authority_text_override=None):
     session_state = _load_session_state()
     if isinstance(session_state, dict) and isinstance(session_state.get("result"), dict):
         session_state = session_state["result"]
@@ -136,6 +136,8 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persist
 
     env = os.environ.copy()
     env["AIPP_PROJECT_BOOT_B64"] = base64.b64encode(boot_text.encode()).decode()
+    if authority_text_override is not None:
+        authority_text = authority_text_override
     env["AIPP_AUTHORITY_LOG_B64"] = base64.b64encode(authority_text.encode()).decode()
     env["AIPP_DISCOVERED_TASKS_B64"] = base64.b64encode(
         json.dumps(candidates, ensure_ascii=False).encode()
@@ -304,9 +306,22 @@ def run():
                 reuse_persisted_state=True,
             )
         else:
-            reuse = command in {"REQUEST_APPROVAL", "APPROVE", "EXECUTE", "VERIFY", "CONTINUE"}
+            reuse = command in {"REQUEST_APPROVAL", "APPROVE", "EXECUTE", "VERIFY", "CONTINUE", "COMPLETE"}
             include_ai = command == "BAŞLA"
-            code, payload, stdout, stderr = _run_aipp(command, task, max_attempts, include_ai=include_ai, reuse_persisted_state=reuse)
+            authority_override = None
+            if command == "COMPLETE":
+                token = get_access_token()
+                folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+                authority_info = find_authority_log(token, folder_id) if folder_id else None
+                if not authority_info:
+                    raise RuntimeError("HALT: AUTHORITY_LOG.md not found in configured Drive folder")
+                authority_override = read_file_text(token, authority_info)
+                if authority_override is None:
+                    raise RuntimeError("HALT: AUTHORITY_LOG.md could not be read from Google Drive")
+            code, payload, stdout, stderr = _run_aipp(
+                command, task, max_attempts, include_ai=include_ai,
+                reuse_persisted_state=reuse, authority_text_override=authority_override
+            )
         response_result = {
             "ok": code == 0,
             "command": command,
