@@ -118,7 +118,19 @@ function escapeHtml(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','
 function getProposal(s){return (s.task_lifecycle?.FUTURE||[])[0]||null}
 function setVisible(id,on){document.getElementById(id).classList.toggle('hidden',!on)}
 function hideFlow(){['decisionCard','reviewCard','waitingCard','executeCard','workingCard','doneCard','errorCard'].forEach(id=>setVisible(id,false))}
-function showReview(){if(!currentProposal)return;setVisible('decisionCard',false);setVisible('waitingCard',false);setVisible('reviewCard',true);document.getElementById('reviewFinding').textContent=currentProposal.description||currentProposal.reason||'AIPP çalışma alanında bu konu bulundu.';document.getElementById('reviewRecommendation').textContent=currentProposal.recommendation||currentProposal.proposal_reason||currentProposal.reason||'AIPP bu konunun ele alınmasını öneriyor.';document.getElementById('reviewNextAction').textContent=currentProposal.next_action||'Onaydan sonra AIPP bu öneriyi uygulanabilir bir aksiyona dönüştürüp doğrulayacak.';renderEvidence(currentProposal)}
+function localizeProposalText(value){
+  if(!value)return value;
+  let s=String(value);
+  s=s.replace(/^Review:\\s*/i,'İncele: ');
+  s=s.replace('Two workspace sources are near-duplicates; review which one is authoritative.','Çalışma alanında iki kaynak neredeyse aynı; hangisinin esas kaynak olduğu belirlenmeli.');
+  s=s.replace('Actionable language found in workspace material without an existing TASK id.','Çalışma alanında henüz bir TASK kaydı olmayan yapılabilir bir öneri bulundu.');
+  s=s.replace('A newer workspace source overlaps canonical task state and may require re-sync.','Daha yeni bir çalışma alanı kaynağı mevcut TASK durumuyla örtüşüyor; yeniden eşleştirme gerekebilir.');
+  s=s.replace('Conflicting status values found for','Çelişen durumlar bulundu:');
+  s=s.replace('Multiple descriptions exist for','Birden fazla açıklama bulundu:');
+  return s;
+}
+
+function showReview(){if(!currentProposal)return;setVisible('decisionCard',false);setVisible('waitingCard',false);setVisible('reviewCard',true);document.getElementById('reviewFinding').textContent=localizeProposalText(currentProposal.description||currentProposal.reason||'AIPP çalışma alanında bu konu bulundu.');document.getElementById('reviewRecommendation').textContent=localizeProposalText(currentProposal.recommendation||currentProposal.proposal_reason||currentProposal.reason||'AIPP bu konunun ele alınmasını öneriyor.');document.getElementById('reviewNextAction').textContent=localizeProposalText(currentProposal.next_action||'Onaydan sonra AIPP bu öneriyi uygulanabilir bir aksiyona dönüştürüp doğrulayacak.');renderEvidence(currentProposal)}
 function renderEvidence(p){const ev=p?.source?.evidence||p?.evidence||[];const d=document.getElementById('evidenceDetails');d.classList.toggle('hidden',!ev.length);document.getElementById('evidence').innerHTML=ev.map(x=>'<div class="small" style="margin-top:10px"><b>'+escapeHtml(x.file_name||'Belge')+'</b><br>Kaynak: '+escapeHtml(x.source||'Google Drive')+'<details><summary>Kanıt alıntısı</summary><code>'+escapeHtml(x.quote||'Kanıt alıntısı bulunamadı.')+'</code></details></div>').join('')}
 function render(data){const s=normalizeState(data);lastRunState=data;const l=s.task_lifecycle||{},g=s.authority_gate||{},now=l.NOW,p=getProposal(s),intel=s.project_intelligence||{};currentProposal=p;suggestedTask=p?.id||now?.id||'';document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':'BAĞLI';hideFlow();
 const status=String(s.status||'').toUpperCase(),pending=g.pending_approval,approved=now&&['APPROVED','NOW'].includes(String(now.status).toUpperCase()),completed=!p&&!pending&&!approved&&((l.COMPLETED||[]).length>0||['COMPLETED','VERIFIED','DONE','SUCCESS'].includes(status));const startHidden=!!(s.ok===false||completed||pending||approved||p||['RUNNING','EXECUTING','IN_PROGRESS'].includes(status));document.getElementById('startBtn').classList.toggle('hidden',startHidden);
