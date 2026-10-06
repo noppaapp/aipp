@@ -16,9 +16,11 @@ class RoutingError(RuntimeError):
 
 
 DEFAULT_MODELS = (
-    ModelSpec("gemini", "pro", frozenset({"text", "code", "reasoning"}), 100),
-    ModelSpec("claude", "sonnet", frozenset({"text", "code", "reasoning"}), 90),
-    ModelSpec("gemini", "flash", frozenset({"text", "code", "fast"}), 80),
+    # Semantic workspace analysis is intentionally Flash-first: it is the
+    # high-volume pass. Pro and Claude remain fallbacks for harder/failed calls.
+    ModelSpec("gemini", "flash", frozenset({"text", "code", "reasoning", "fast"}), 100),
+    ModelSpec("gemini", "pro", frozenset({"text", "code", "reasoning"}), 90),
+    ModelSpec("claude", "sonnet", frozenset({"text", "code", "reasoning"}), 80),
 )
 
 
