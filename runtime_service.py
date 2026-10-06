@@ -15,6 +15,8 @@ from aipp_drive_runtime import (
     find_authority_log,
     read_file_text,
     write_authority_approval,
+    read_session_state,
+    write_session_state,
     discover_task_candidates,
     get_credentials,
 )
@@ -185,9 +187,11 @@ def status():
     if auth_error:
         return auth_error
     try:
-        saved = _load_session_state()
-        if saved and saved.get("result"):
-            return jsonify(saved["result"])
+        token = get_access_token()
+        folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+        saved = read_session_state(token, folder_id) if folder_id else None
+        if saved:
+            return jsonify(saved)
         boot, authority, candidates, intelligence = _drive_context(include_ai=False)
         return jsonify(
             {
