@@ -31,10 +31,12 @@ def write_boot(path):
     )
 
 
-def test_session_restart_does_not_restore_ephemeral_authority_state(tmp_path):
+def test_session_restart_does_not_restore_ephemeral_authority_state(tmp_path, monkeypatch):
     """A fresh process must not recover approval from discarded runtime memory."""
     write_boot(tmp_path)
 
+    bootstrap = run("BAŞLA", tmp_path)
+    monkeypatch.setenv("AIPP_SESSION_STATE_B64", base64.b64encode(bootstrap.stdout.encode()).decode())
     first = run("REQUEST_APPROVAL", tmp_path, "SESSION-001")
     first_state = json.loads(first.stdout)
     assert first_state["status"] == "AWAITING_AUTHORITY"
@@ -65,9 +67,11 @@ def test_session_restart_reloads_canonical_project_boot(tmp_path):
     print("SESSION_CONTINUATION_PROOF: canonical PROJECT_BOOT reloaded; ephemeral authority state was not restored")
 
 
-def test_runner_continuation_consumes_canonical_approval(tmp_path):
+def test_runner_continuation_consumes_canonical_approval(tmp_path, monkeypatch):
     """The real runner must consume canonical approval before bounded continuation."""
     write_boot(tmp_path)
+    bootstrap = run("BAŞLA", tmp_path)
+    monkeypatch.setenv("AIPP_SESSION_STATE_B64", base64.b64encode(bootstrap.stdout.encode()).decode())
     task = {
         "id": "SESSION-001",
         "title": "Cross-session continuation proof",
