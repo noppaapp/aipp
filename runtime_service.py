@@ -276,6 +276,25 @@ def run():
                             "stdout": json.dumps(persisted, ensure_ascii=False),
                             "stderr": "", "reused_session": True,
                             "oauth_client_fingerprint": _oauth_client_fingerprint()}), 200
+        if command == "REQUEST_APPROVAL" and task:
+            # The panel can hold a proposal id from an earlier scan while the
+            # persisted session has already been reconciled. Never send that
+            # stale id into the runner: refresh workspace intelligence first.
+            current_future = (persisted or {}).get("task_lifecycle", {}).get("FUTURE", []) if isinstance(persisted, dict) else []
+            if not any(isinstance(item, dict) and item.get("id") == task for item in current_future):
+                code0, refreshed, _, err0 = _run_aipp(
+                    "BAŞLA", None, max_attempts, include_ai=True,
+                    reuse_persisted_state=False,
+                )
+                if code0 != 0 or not refreshed:
+                    raise RuntimeError(err0 or "HALT: workspace refresh failed before approval request")
+                refreshed_future = refreshed.get("task_lifecycle", {}).get("FUTURE", [])
+                if not any(isinstance(item, dict) and item.get("id") == task for item in refreshed_future):
+                    current = refreshed_future[0].get("id") if refreshed_future else None
+                    raise RuntimeError(
+                        f"HALT: stale approval target {task}; current FUTURE task is {current or 'none'}. Refresh the panel and select the current proposal."
+                    )
+                persisted = refreshed
         if command == "APPROVE":
             if not task:
                 raise RuntimeError("HALT: --task is required.")
