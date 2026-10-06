@@ -103,6 +103,7 @@ def reconcile_project_intelligence(state, intelligence):
     result = state
     lifecycle = result.setdefault("task_lifecycle", {})
     future = lifecycle.setdefault("FUTURE", [])
+    priority_rank = {"status_conflict":100,"task_definition_drift":95,"newer_supporting_source":85,"actionable_untracked_idea":70,"near_duplicate":60,"workspace_review_required":10}
     existing_ids = {
         task.get("id")
         for bucket in ("NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED")
@@ -149,14 +150,18 @@ def reconcile_project_intelligence(state, intelligence):
             "change_action": proposal.get("action"),
             "next_action": proposal.get("next_action", ""),
             "requires_authority": True,
+            "priority": int(proposal.get("priority", priority_rank.get(proposal.get("finding_type"), 50))),
         })
         existing_ids.add(proposal_id_value)
+    future.sort(key=lambda item: (-int(item.get("priority", 50)), str(item.get("id", ""))))
+    result["intelligence_queue"] = [item.get("id") for item in future if item.get("id")]
     result["project_intelligence"] = {
-        "version": intelligence.get("version"),
-        "engine": intelligence.get("engine"),
+        "version": intelligence.get("version"), "engine": intelligence.get("engine"),
         "documents_scanned": intelligence.get("documents_scanned", 0),
         "finding_count": len(intelligence.get("findings", [])),
         "proposal_count": len(intelligence.get("proposals", [])),
+        "queue_count": len(future),
+        "queue": [{"id":x.get("id"),"title":x.get("title"),"priority":x.get("priority",50),"finding_type":x.get("source",{}).get("finding_type")} for x in future],
     }
     if intelligence.get("proposals"):
         result.setdefault("authority_gate", {})["last_action"] = "PROJECT_INTELLIGENCE_PROPOSALS"
