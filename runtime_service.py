@@ -134,6 +134,17 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True):
     env["AIPP_PROJECT_INTELLIGENCE_B64"] = base64.b64encode(
         json.dumps(intelligence, ensure_ascii=False).encode()
     ).decode()
+    # Carry the persisted runtime state into the runner so every command
+    # continues the same session instead of rebuilding from an empty state.
+    session_state = _load_session_state()
+    if not isinstance(session_state, dict):
+        session_state = None
+    if session_state and isinstance(session_state.get("result"), dict):
+        session_state = session_state["result"]
+    if session_state:
+        env["AIPP_SESSION_STATE_B64"] = base64.b64encode(
+            json.dumps(session_state, ensure_ascii=False).encode()
+        ).decode()
 
     cmd = [
         sys.executable,
