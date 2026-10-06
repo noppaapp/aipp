@@ -194,10 +194,10 @@ def recommend_next_proposal(state, workspace):
     next_number = max(numeric_ids, default=0) + 1
     proposal = {
         "id": f"TASK-{next_number:02d}",
-        "title": "Complete AIPP execution proof",
-        "description": "Complete the outstanding physical execution proof and verify the configured external execution capability.",
+        "title": "AIPP yürütme kanıtını tamamla",
+        "description": "Bekleyen gerçek yürütme kanıtını tamamla ve yapılandırılmış dış yürütme yeteneğini doğrula.",
         "status": "PROPOSED",
-        "proposal_reason": "AIPP_EXECUTION_PROOF.md is explicitly marked PROOF_REQUESTED while no pending task exists.",
+        "proposal_reason": "AIPP_EXECUTION_PROOF.md belgesi PROOF_REQUESTED olarak işaretli, ancak bekleyen TASK bulunmuyor.",
         "capability": "external_execution_proof",
         "source": {"artifact": "AIPP_EXECUTION_PROOF.md", "signal": "PROOF_REQUESTED"},
     }
