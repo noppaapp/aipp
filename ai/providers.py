@@ -44,7 +44,7 @@ class GeminiAdapter:
         model_name = os.environ.get("AIPP_GEMINI_PRO_MODEL" if model.model == "pro" else "AIPP_GEMINI_FLASH_MODEL")
         model_name = model_name or {
             "pro": "gemini-3.1-pro-preview",
-            "flash": "gemini-3.8-flash",
+            "flash": "gemini-3.7-flash",
         }.get(model.model, model.model)
         payload = {
             "systemInstruction": {"parts": [{"text": str(task.get("system") or "")}]},
