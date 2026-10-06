@@ -448,12 +448,10 @@ def main():
     elif command == "REQUEST_APPROVAL":
         if not args.task:
             raise RuntimeError("HALT: --task is required.")
-        state = initialize_state(state, ".")
         state = request_approval(state, args.task)
     elif command == "APPROVE":
         if not args.task:
             raise RuntimeError("HALT: --task is required.")
-        state = initialize_state(state, ".")
         state = request_approval(state, args.task)
         state = approve_task(state, args.task)
     elif command == "EXECUTE":
@@ -461,7 +459,6 @@ def main():
     elif command == "EXECUTE_APPROVED":
         if not args.task:
             raise RuntimeError("HALT: --task is required.")
-        state = initialize_state(state, ".")
         state = request_approval(state, args.task)
         state = approve_task(state, args.task)
         state = execute_task(state, ".")
@@ -470,7 +467,6 @@ def main():
     elif command == "CONTINUE":
         if not args.task:
             raise RuntimeError("HALT: --task is required for CONTINUE.")
-        state = initialize_state(state, ".")
         state = request_approval(state, args.task)
         state = approve_task(state, args.task)
         state = continue_execution(state, ".", max_attempts=args.max_attempts)
