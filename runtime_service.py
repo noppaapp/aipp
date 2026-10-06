@@ -208,9 +208,21 @@ def status():
     if auth_error:
         return auth_error
     try:
-        # Status is a strictly read-only landing view.
-        # It never restores an old session and never runs the AIPP runner.
-        # A real BAŞLAT command is handled only by POST /api/run.
+        # Status remains strictly read-only: it never runs the runner or AI.
+        # It restores the durable session snapshot from Drive so refresh cannot
+        # erase an active queue or decision.
+        token = get_access_token()
+        folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+        persisted = read_session_state(token, folder_id) if folder_id else None
+        if isinstance(persisted, dict) and isinstance(persisted.get("result"), dict):
+            persisted = persisted["result"]
+        if isinstance(persisted, dict) and persisted.get("task_lifecycle"):
+            persisted = dict(persisted)
+            persisted["ok"] = True
+            persisted["source"] = "Google Drive"
+            persisted["runtime"] = "AIPP Standalone Cloud Runtime"
+            persisted["oauth_client_fingerprint"] = _oauth_client_fingerprint()
+            return jsonify(persisted)
         return jsonify(
             {
                 "ok": True,
