@@ -217,10 +217,10 @@ def status():
             _save_session_state({"result": saved, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
             return jsonify(saved)
 
-        # Rehydrate the canonical session when the ephemeral local state was lost
-        # (for example after a Render restart). Without this, /api/status exposes
-        # raw Drive discovery only and the panel falls back to BAŞLAT.
-        code, payload, _, stderr = _run_aipp("BAŞLA", include_ai=True)
+        # Status is a read-only view. It must never trigger AI analysis: the panel
+        # polls this endpoint repeatedly, and doing so would consume provider quota.
+        # A real BAŞLAT command performs the full Drive + AI analysis below /api/run.
+        code, payload, _, stderr = _run_aipp("BAŞLA", include_ai=False)
         if code == 0 and isinstance(payload, dict):
             _save_session_state({
                 "result": payload,
