@@ -269,11 +269,13 @@ def run():
             "oauth_client_fingerprint": _oauth_client_fingerprint(),
         }
         if code == 0 and payload:
+            # Persist the live session locally before any external Drive write.
+            # Panel status must never lose a valid result because external persistence is slower or unreadable.
+            _save_session_state({"result": payload, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
             token = get_access_token()
             folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
             if folder_id:
                 write_session_state(token, folder_id, payload)
-            _save_session_state({"result": payload, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
         return (
             jsonify(response_result),
             200 if code == 0 else 422,
