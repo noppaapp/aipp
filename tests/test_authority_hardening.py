@@ -125,16 +125,19 @@ def test_completion_approval_completes_verified_task(monkeypatch):
 
 def test_completion_approval_cannot_survive_payload_mutation(monkeypatch):
     monkeypatch.setenv("AIPP_REQUIRE_COMPLETION_GATE", "1")
-    task = gh_task()
+    task = {
+        "id": "T-3", "title": "complete", "status": "FUTURE", "dependency_reason": "-",
+        "external_action": "LOCAL_ONLY", "target_path": "docs/a.txt", "target_content": "hello",
+    }
     state = state_with(task)
-    state = aipp_runner.request_approval(state, "GH-001")
-    state = aipp_runner.approve_task(state, "GH-001", row(proposal_id(task), "GH-001"))
+    state = aipp_runner.request_approval(state, "T-3")
+    state = aipp_runner.approve_task(state, "T-3", row(proposal_id(task), "T-3"))
     state = aipp_runner.execute_task(state, ".")
     state = aipp_runner.verify_task(state, ".")
     state["task_lifecycle"]["NOW"]["target_content"] = "changed after verification"
     pid = state["task_lifecycle"]["NOW"]["proposal_id"]
     with pytest.raises(RuntimeError, match="binding digest mismatch"):
-        aipp_runner.complete_task(state, "GH-001", row(pid, "GH-001", "COMPLETED"))
+        aipp_runner.complete_task(state, "T-3", row(pid, "T-3", "COMPLETED"))
 
 
 def test_signed_completion_approval_is_verified(monkeypatch):
