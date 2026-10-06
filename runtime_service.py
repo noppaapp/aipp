@@ -217,37 +217,20 @@ def status():
             _save_session_state({"result": saved, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
             return jsonify(saved)
 
-        # Status is a read-only view. It must never trigger AI analysis: the panel
-        # polls this endpoint repeatedly, and doing so would consume provider quota.
-        # A real BAŞLAT command performs the full Drive + AI analysis below /api/run.
-        code, payload, _, stderr = _run_aipp("BAŞLA", include_ai=False)
-        if code == 0 and isinstance(payload, dict):
-            _save_session_state({
-                "result": payload,
-                "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
-            })
-            if folder_id:
-                write_session_state(token, folder_id, payload)
-            return jsonify(payload)
-
-        boot, authority, candidates, intelligence = _drive_context(include_ai=False)
+        # Status is a strictly read-only view.
+        # It must never scan Drive, run the runner, create proposals, or call AI.
+        # A real BAŞLAT command is handled only by POST /api/run.
         return jsonify(
             {
                 "ok": True,
                 "source": "Google Drive",
                 "runtime": "AIPP Standalone Cloud Runtime",
-                "project_boot": bool(boot),
-                "authority_log": bool(authority),
-                "task_candidates": candidates,
-                "candidate_count": len(candidates),
+                "status": "READY",
+                "project_boot": False,
+                "authority_log": False,
+                "task_candidates": [],
+                "candidate_count": 0,
                 "oauth_client_fingerprint": _oauth_client_fingerprint(),
-                "project_intelligence": {
-                    "version": intelligence.get("version"),
-                    "engine": intelligence.get("engine"),
-                    "documents_scanned": intelligence.get("documents_scanned"),
-                    "finding_count": len(intelligence.get("findings", [])),
-                    "proposal_count": len(intelligence.get("proposals", [])),
-                },
             }
         )
     except Exception as exc:
