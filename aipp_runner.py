@@ -156,6 +156,14 @@ def default_state():
 
 
 def load_state():
+    encoded = os.environ.get("AIPP_SESSION_STATE_B64", "").strip()
+    if encoded:
+        try:
+            value = json.loads(base64.b64decode(encoded).decode("utf-8"))
+            if isinstance(value, dict):
+                return value
+        except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("HALT: Persisted session state transport is invalid") from exc
     return default_state()
 
 
