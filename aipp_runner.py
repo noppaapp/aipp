@@ -52,15 +52,17 @@ def validate_workspace():
 
 
 def load_canonical_project_boot(workspace="."):
-    boot_path = Path(workspace) / "PROJECT_BOOT.md"
-    if boot_path.exists():
-        return boot_path.read_text(encoding="utf-8")
+    # The Drive-supplied canonical PROJECT_BOOT.md wins. The repo's own copy is
+    # only a fallback for local/dev runs.
     encoded = os.environ.get("AIPP_PROJECT_BOOT_B64", "").strip()
     if encoded:
         try:
             return base64.b64decode(encoded).decode("utf-8")
         except (ValueError, UnicodeDecodeError) as exc:
             raise RuntimeError("HALT: Canonical PROJECT_BOOT.md transport is invalid") from exc
+    boot_path = Path(workspace) / "PROJECT_BOOT.md"
+    if boot_path.exists():
+        return boot_path.read_text(encoding="utf-8")
     raise RuntimeError("HALT: Canonical PROJECT_BOOT.md was not supplied by Drive runtime")
 
 
