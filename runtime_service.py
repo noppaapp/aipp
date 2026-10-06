@@ -214,7 +214,22 @@ def status():
         folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
         saved = read_session_state(token, folder_id) if folder_id else None
         if saved:
+            _save_session_state({"result": saved, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
             return jsonify(saved)
+
+        # Rehydrate the canonical session when the ephemeral local state was lost
+        # (for example after a Render restart). Without this, /api/status exposes
+        # raw Drive discovery only and the panel falls back to BAŞLAT.
+        code, payload, _, stderr = _run_aipp("BAŞLA", include_ai=True)
+        if code == 0 and isinstance(payload, dict):
+            _save_session_state({
+                "result": payload,
+                "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            })
+            if folder_id:
+                write_session_state(token, folder_id, payload)
+            return jsonify(payload)
+
         boot, authority, candidates, intelligence = _drive_context(include_ai=False)
         return jsonify(
             {
