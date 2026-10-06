@@ -153,9 +153,26 @@ def analyze_with_ai(documents):
         if not registry:
             _telemetry(enabled=True, available=False, provider="NONE", reason="no_configured_provider_key")
             return {"enabled": True, "available": False, "reason": "No configured AI provider key"}
-        provider = max(registry, key=lambda model: model.priority).provider
-        selected = execute(task, configured_adapter(provider), registry=registry)
-        validated = _validate(selected.output, documents)
+        # Try configured providers in priority order. A quota/rate-limit failure
+        # on the preferred provider must not disable holistic analysis when a
+        # lower-priority configured provider is available.
+        ordered = sorted(registry, key=lambda model: model.priority, reverse=True)
+        provider_errors = []
+        selected = None
+        validated = None
+        for model_spec in ordered:
+            provider = model_spec.provider
+            try:
+                candidate = execute(task, configured_adapter(provider), registry=(model_spec,))
+                candidate_validated = _validate(candidate.output, documents)
+                selected = candidate
+                validated = candidate_validated
+                break
+            except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
+                provider_errors.append(f"{provider}:{type(exc).__name__}:{exc}")
+                continue
+        if selected is None or validated is None:
+            raise ProviderError("all configured AI providers failed: " + " | ".join(provider_errors))
     except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
         _telemetry(
             enabled=True,
