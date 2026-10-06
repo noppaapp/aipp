@@ -267,6 +267,7 @@ def run():
             raise RuntimeError("HALT: max_attempts must be between 1 and 5")
 
         body.pop("_runtime_token", None)
+        authority_override = None
         persisted = _load_session_state()
         if isinstance(persisted, dict) and isinstance(persisted.get("result"), dict):
             persisted = persisted["result"]
@@ -298,6 +299,11 @@ def run():
                 pass
             else:
                 write_authority_approval(token, folder_id, approved_task, datetime.now(timezone.utc).isoformat())
+            authority_info = find_authority_log(token, folder_id)
+            if authority_info:
+                authority_override = read_file_text(token, authority_info)
+                if authority_override is None:
+                    raise RuntimeError("HALT: AUTHORITY_LOG.md could not be read from Google Drive")
         if command == "EXECUTE_APPROVED":
             # APPROVE has already been completed by the preceding operator action.
             # Re-running APPROVE here would search FUTURE again after the proposal
@@ -313,7 +319,6 @@ def run():
         else:
             reuse = command in {"REQUEST_APPROVAL", "APPROVE", "EXECUTE", "VERIFY", "CONTINUE", "COMPLETE"}
             include_ai = command == "BAŞLA"
-            authority_override = None
             if command == "COMPLETE":
                 token = get_access_token()
                 folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
