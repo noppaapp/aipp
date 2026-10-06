@@ -82,7 +82,13 @@ def runtime_request(path, method='GET', payload=None):
     return data
 
 def panel_html():
-    return Response((PANEL_DIR / 'index.html').read_text(encoding='utf-8'), mimetype='text/html')
+    response = Response((PANEL_DIR / 'index.html').read_text(encoding='utf-8'), mimetype='text/html')
+    # The panel is a live operator surface. Never let a stale browser/CDN copy
+    # hide the current Turkish UI after a deployment.
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.get('/')
 def index():
