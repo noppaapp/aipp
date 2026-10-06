@@ -247,6 +247,26 @@ def analyze_documents(documents):
             "requires_authority": True, "status": "PROPOSED",
         })
 
+    if not proposals and docs:
+        canonical = next((d for d in docs if d["name"] == "PROJECT_BOOT.md"), docs[0])
+        reason = "Çalışma alanında açık bir TASK bulunmadı; AIPP mevcut kaynakları bütünsel olarak inceleyip sonraki somut adımı belirlemeyi öneriyor."
+        evidence = [_evidence(canonical, reason, excerpt=_excerpt(canonical.get("text")))]
+        findings.append({
+            "type": "workspace_review_required",
+            "file_name": canonical["name"],
+            "evidence": evidence,
+        })
+        proposals.append({
+            "action": "REVIEW",
+            "target": "AIPP çalışma alanı",
+            "reason": reason,
+            "finding_type": "workspace_review_required",
+            "evidence": evidence,
+            "next_action": "Kaynakları bütünsel olarak değerlendirip kanıta dayalı bir sonraki aksiyonu hazırlamak ve sonucu doğrulamak.",
+            "requires_authority": True,
+            "status": "PROPOSED",
+        })
+
     proposals.sort(key=lambda p: (p["finding_type"], p["target"], p["action"]))
     kind_counts = defaultdict(int)
     for doc in docs:
