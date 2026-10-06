@@ -264,7 +264,19 @@ def find_future_task(state, task_id):
 def request_approval(state, task_id):
     task = find_future_task(state, task_id)
     if task is None:
-        raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
+        # The panel may hold the proposal ID from the immediately preceding
+        # BAŞLA scan while a fresh Drive/AI reconciliation has regenerated the
+        # in-memory proposal set. Never silently approve an arbitrary task:
+        # only recover when there is exactly one current FUTURE proposal.
+        future = [
+            item for item in state["task_lifecycle"].get("FUTURE", [])
+            if isinstance(item, dict) and item.get("id")
+        ]
+        if len(future) == 1:
+            task = future[0]
+            task["id"] = task_id
+        else:
+            raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
     state["authority_gate"]["pending_approval"] = task_id
     state["authority_gate"]["pending_proposal_id"] = proposal_id(task)
     state["authority_gate"]["last_action"] = "APPROVAL_REQUESTED"
