@@ -27,5 +27,5 @@ def test_executor_keeps_provider_call_outside_core():
     result = execute(task, adapter)
 
     assert result.provider == "gemini"
-    assert result.model == "pro"
+    assert result.model == "flash"
     assert adapter.calls[0][1] is task
