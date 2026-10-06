@@ -42,7 +42,6 @@ def _save_session_state(payload):
         print(f"AIPP_SESSION_STATE_SAVE_ERROR type={type(exc).__name__}", flush=True)
 
 
-
 def _token_fingerprint(value):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12] if value else "NONE"
 
@@ -162,9 +161,19 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True):
     payload = None
     if stdout:
         try:
-            payload = json.loads(stdout.splitlines()[-1])
-        except Exception:
-            pass
+            payload = json.loads(stdout)
+        except json.JSONDecodeError:
+            for line in reversed(stdout.splitlines()):
+                candidate = line.strip()
+                if not candidate:
+                    continue
+                try:
+                    parsed = json.loads(candidate)
+                    if isinstance(parsed, dict):
+                        payload = parsed
+                        break
+                except json.JSONDecodeError:
+                    continue
 
     return result.returncode, payload, stdout, stderr
 
@@ -269,8 +278,6 @@ def run():
             "oauth_client_fingerprint": _oauth_client_fingerprint(),
         }
         if code == 0 and payload:
-            # Persist the live session locally before any external Drive write.
-            # Panel status must never lose a valid result because external persistence is slower or unreadable.
             _save_session_state({"result": payload, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
             token = get_access_token()
             folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
