@@ -47,7 +47,7 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
 <div class="state">AIPP NE BULDU?</div>
 <div class="callout" id="reviewFinding">AIPP'nin bulduğu konu burada açıklanır.</div>
 <div class="eyebrow" style="margin-top:18px">AIPP NE ÖNERİYOR?</div>
-<div class="callout" id="reviewRecommendation">AIPP'nin önerisi burada açıklanır.</div>
+<div class="callout" id="reviewRecommendation">AIPP'nin önerisi burada açıklanır.</div><div class="eyebrow" style="margin-top:18px">ONAYDAN SONRA NE YAPILACAK?</div><div class="callout" id="reviewNextAction">AIPP'nin gerçekleştireceği aksiyon burada açıklanır.</div>
 <div class="actions">
 <button class="primary choice" id="approveBtn" onclick="approveHuman()">ONAYLA</button>
 
@@ -112,13 +112,13 @@ function updateAuth(){document.getElementById('authState').textContent=token()?'
 function headers(){const h={'Content-Type':'application/json'};if(token())h['X-AIPP-Panel-Token']=token();return h}
 let suggestedTask='',currentProposal=null,lastRunState=null;
 function normalizeState(data){if(data&&data.result&&typeof data.result==='object')return data.result;if(data&&data.stdout){try{return JSON.parse(data.stdout.split(/\r?\n/).filter(Boolean).pop())}catch(_){}}return data||{}}
-function saveRunState(data){try{sessionStorage.setItem('aipp_last_run_state',JSON.stringify(data))}catch(_){}}
-function loadRunState(){try{const v=sessionStorage.getItem('aipp_last_run_state');return v?JSON.parse(v):null}catch(_){return null}}
+function saveRunState(data){try{localStorage.setItem('aipp_last_run_state',JSON.stringify(data))}catch(_){}}
+function loadRunState(){try{const v=localStorage.getItem('aipp_last_run_state');return v?JSON.parse(v):null}catch(_){return null}}
 function escapeHtml(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function getProposal(s){return (s.task_lifecycle?.FUTURE||[])[0]||null}
 function setVisible(id,on){document.getElementById(id).classList.toggle('hidden',!on)}
 function hideFlow(){['decisionCard','reviewCard','waitingCard','executeCard','workingCard','doneCard','errorCard'].forEach(id=>setVisible(id,false))}
-function showReview(){if(!currentProposal)return;setVisible('decisionCard',false);setVisible('waitingCard',false);setVisible('reviewCard',true);document.getElementById('reviewFinding').textContent=currentProposal.description||currentProposal.reason||'AIPP çalışma alanında bu konu bulundu.';document.getElementById('reviewRecommendation').textContent=currentProposal.recommendation||currentProposal.reason||'AIPP bu konunun ele alınmasını öneriyor.';renderEvidence(currentProposal)}
+function showReview(){if(!currentProposal)return;setVisible('decisionCard',false);setVisible('waitingCard',false);setVisible('reviewCard',true);document.getElementById('reviewFinding').textContent=currentProposal.description||currentProposal.reason||'AIPP çalışma alanında bu konu bulundu.';document.getElementById('reviewRecommendation').textContent=currentProposal.recommendation||currentProposal.proposal_reason||currentProposal.reason||'AIPP bu konunun ele alınmasını öneriyor.';document.getElementById('reviewNextAction').textContent=currentProposal.next_action||'Onaydan sonra AIPP bu öneriyi uygulanabilir bir aksiyona dönüştürüp doğrulayacak.';renderEvidence(currentProposal)}
 function renderEvidence(p){const ev=p?.source?.evidence||p?.evidence||[];const d=document.getElementById('evidenceDetails');d.classList.toggle('hidden',!ev.length);document.getElementById('evidence').innerHTML=ev.map(x=>'<div class="small" style="margin-top:10px"><b>'+escapeHtml(x.file_name||'Belge')+'</b><br>Kaynak: '+escapeHtml(x.source||'Google Drive')+'<details><summary>Kanıt alıntısı</summary><code>'+escapeHtml(x.quote||'Kanıt alıntısı bulunamadı.')+'</code></details></div>').join('')}
 function render(data){const s=normalizeState(data);lastRunState=data;const l=s.task_lifecycle||{},g=s.authority_gate||{},now=l.NOW,p=getProposal(s),intel=s.project_intelligence||{};currentProposal=p;suggestedTask=p?.id||now?.id||'';document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':'BAĞLI';hideFlow();
 const status=String(s.status||'').toUpperCase(),pending=g.pending_approval,approved=now&&['APPROVED','NOW'].includes(String(now.status).toUpperCase()),completed=(l.COMPLETED||[]).length>0||['COMPLETED','VERIFIED','DONE','SUCCESS'].includes(status);
