@@ -267,7 +267,9 @@ def run():
                 raise RuntimeError("HALT: approval target is not a current FUTURE proposal")
             from datetime import datetime, timezone
             write_authority_approval(token, folder_id, approved_task, datetime.now(timezone.utc).isoformat())
-        code, payload, stdout, stderr = _run_aipp(command, task, max_attempts, include_ai=True)
+        runner_command = "EXECUTE" if command == "EXECUTE_APPROVED" else command
+        runner_ai = False if command == "EXECUTE_APPROVED" else True
+        code, payload, stdout, stderr = _run_aipp(runner_command, task, max_attempts, include_ai=runner_ai)
         response_result = {
             "ok": code == 0,
             "command": command,
