@@ -45,7 +45,7 @@ def test_session_restart_does_not_restore_ephemeral_authority_state(tmp_path, mo
 
     second = run("APPROVE", tmp_path, "SESSION-001", check=False)
     assert second.returncode != 0
-    assert "canonical Authority Gate transition" in second.stderr
+    assert "Canonical Authority Gate approval not found" in second.stderr
     assert not (tmp_path / "aipp_state.json").exists()
 
 
