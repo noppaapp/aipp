@@ -304,8 +304,9 @@ def run():
                 reuse_persisted_state=True,
             )
         else:
-            reuse = command in {"EXECUTE", "VERIFY", "CONTINUE"}
-            code, payload, stdout, stderr = _run_aipp(command, task, max_attempts, include_ai=True, reuse_persisted_state=reuse)
+            reuse = command in {"REQUEST_APPROVAL", "APPROVE", "EXECUTE", "VERIFY", "CONTINUE"}
+            include_ai = command == "BAŞLA"
+            code, payload, stdout, stderr = _run_aipp(command, task, max_attempts, include_ai=include_ai, reuse_persisted_state=reuse)
         response_result = {
             "ok": code == 0,
             "command": command,
