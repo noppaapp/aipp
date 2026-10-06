@@ -18,6 +18,7 @@ except ImportError:
 DRIVE_API = "https://www.googleapis.com/drive/v3"
 PROJECT_BOOT = "PROJECT_BOOT.md"
 AUTHORITY_LOG = "AUTHORITY_LOG.md"
+SESSION_STATE = "AIPP_SESSION_STATE.json"
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
 GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation"
@@ -134,6 +135,42 @@ def find_project_boot(token, folder_id):
     file_info = files[0]
     print(f"DRIVE_PROJECT_BOOT_FOUND id={file_info.get('id')} mimeType={file_info.get('mimeType')} modifiedTime={file_info.get('modifiedTime')}")
     return file_info
+
+
+def find_session_state(token, folder_id):
+    all_files = list_workspace_tree(token, folder_id)
+    files = [file_info for file_info in all_files if file_info.get("name") == SESSION_STATE]
+    if len(files) > 1:
+        ids = ",".join(file_info.get("id", "") for file_info in files)
+        raise RuntimeError(f"HALT: multiple {SESSION_STATE} files found in configured Drive workspace: {ids}")
+    return files[0] if files else None
+
+
+def read_session_state(token, folder_id):
+    info = find_session_state(token, folder_id)
+    if not info:
+        return None
+    raw = read_file_text(token, info)
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw)
+        return value if isinstance(value, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def write_session_state(token, folder_id, state):
+    content = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
+    info = find_session_state(token, folder_id)
+    if info:
+        endpoint = f"https://www.googleapis.com/upload/drive/v3/files/{info.get('id')}?{urlencode({'uploadType': 'media', 'supportsAllDrives': 'true'})}"
+        _request(endpoint, method="PATCH", data=content.encode("utf-8"), token=token, content_type="application/json")
+        return
+    metadata = json.dumps({"name": SESSION_STATE, "parents": [folder_id], "mimeType": "application/json"}).encode("utf-8")
+    created = json.loads(_request(f"{DRIVE_API}/files?{urlencode({'supportsAllDrives': 'true'})}", method="POST", data=metadata, token=token, content_type="application/json"))
+    endpoint = f"https://www.googleapis.com/upload/drive/v3/files/{created['id']}?{urlencode({'uploadType': 'media', 'supportsAllDrives': 'true'})}"
+    _request(endpoint, method="PATCH", data=content.encode("utf-8"), token=token, content_type="application/json")
 
 
 def find_authority_log(token, folder_id):
