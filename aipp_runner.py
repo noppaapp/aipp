@@ -213,20 +213,27 @@ def initialize_state(state, workspace):
     state = reconcile_discovered_tasks(state, load_discovered_tasks())
     intelligence = load_project_intelligence()
     state = reconcile_project_intelligence(state, intelligence)
-    if not state.get("task_lifecycle", {}).get("FUTURE") and intelligence.get("documents_scanned", 0):
-        lifecycle = state.setdefault("task_lifecycle", {})
-        lifecycle.setdefault("FUTURE", []).append({
-            "id": "INTEL-0001",
-            "title": "Review: AIPP çalışma alanı",
-            "description": "Çalışma alanında açık bir TASK bulunmadı; mevcut kaynakların bütünsel olarak incelenmesi gerekiyor.",
-            "status": "PROPOSED",
-            "proposal_reason": "AIPP çalışma alanında incelenmiş kaynaklar var ancak yürütülebilir bir TASK bulunmadı.",
-            "recommendation": "Kaynakları bütünsel olarak değerlendirip kanıta dayalı bir sonraki aksiyonu belirlemek.",
-            "source": {"engine": intelligence.get("engine", "deterministic-evidence-reconciliation"), "finding_type": "workspace_review_required", "target": "AIPP çalışma alanı", "evidence": []},
-            "change_action": "REVIEW",
-            "next_action": "Kaynakları bütünsel olarak değerlendirip sonucu doğrulamak.",
-            "requires_authority": True,
-        })
+    lifecycle = state.setdefault("task_lifecycle", {})
+    if not lifecycle.get("NOW") and not lifecycle.get("FUTURE"):
+        existing_ids = {
+            task.get("id")
+            for bucket in ("DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED")
+            for task in (lifecycle.get(bucket) or [])
+            if isinstance(task, dict) and task.get("id")
+        }
+        if "INTEL-0001" not in existing_ids:
+            lifecycle.setdefault("FUTURE", []).append({
+                "id": "INTEL-0001",
+                "title": "Review: AIPP çalışma alanı",
+                "description": "AIPP çalışma alanında yürütülebilir bir TASK bulunmadı; mevcut kaynakların bütünsel olarak incelenmesi gerekiyor.",
+                "status": "PROPOSED",
+                "proposal_reason": "TASK adayı bulunmadığında AIPP boşta kalmamalı; insan onayına sunulacak tek bir sonraki aksiyon üretmelidir.",
+                "recommendation": "Mevcut çalışma alanını kanıta dayalı olarak inceleyip doğrulanabilir bir sonraki aksiyonu belirlemek.",
+                "source": {"engine": intelligence.get("engine", "deterministic-workspace-fallback"), "finding_type": "workspace_review_required", "target": "AIPP çalışma alanı", "evidence": []},
+                "change_action": "REVIEW",
+                "next_action": "Çalışma alanını inceleyip sonucu doğrulamak.",
+                "requires_authority": True,
+            })
     state = recommend_next_proposal(state, workspace)
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
