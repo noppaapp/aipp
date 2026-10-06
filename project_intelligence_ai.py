@@ -21,7 +21,7 @@ Do not approve, execute, or mutate anything.
 Every proposal must have at least one exact evidence quote from supplied material.
 """
 
-def _bounded_text(documents, limit=120000):
+def _bounded_text(documents, limit=60000):
     chunks, used = [], 0
     for doc in documents:
         text = str(doc.get("text") or "")
@@ -37,6 +37,31 @@ def _bounded_text(documents, limit=120000):
         if used >= limit:
             break
     return "".join(chunks)
+
+
+def _document_chunks(documents, limit=60000):
+    """Split the full Drive corpus into bounded, lossless document chunks."""
+    chunks, current, used = [], [], 0
+    for doc in documents:
+        text = str(doc.get("text") or "")
+        if not text:
+            continue
+        block = f'<document file_name="{doc.get("name","")}">\n{text}\n</document>\n'
+        if current and used + len(block) > limit:
+            chunks.append("".join(current))
+            current, used = [], 0
+        if len(block) <= limit:
+            current.append(block)
+            used += len(block)
+            continue
+        start = 0
+        while start < len(block):
+            chunks.append(block[start:start + limit])
+            start += limit
+        current, used = [], 0
+    if current:
+        chunks.append("".join(current))
+    return chunks
 
 
 def _validate(result, documents):
@@ -118,7 +143,7 @@ def _telemetry(**fields):
 
 
 def analyze_with_ai(documents):
-    """Return validated AI proposals, or an explicit unavailable result."""
+    """Return validated holistic AI proposals, or an explicit unavailable result."""
     if os.environ.get("AIPP_SEMANTIC_ANALYSIS", "").strip().lower() not in {"1", "true", "yes", "on"}:
         _telemetry(enabled=False, available=False, reason="semantic_analysis_disabled")
         return {"enabled": False, "available": False, "reason": "semantic analysis disabled"}
@@ -126,24 +151,8 @@ def analyze_with_ai(documents):
         _telemetry(enabled=True, available=False, reason="no_readable_documents")
         return {"enabled": True, "available": False, "reason": "no readable documents"}
 
-    prompt = (
-        "Analyze the supplied workspace as one coherent project, not as isolated files. "
-        "Identify concrete contradictions, overlaps, duplicated concepts, obsolete decisions, "
-        "unresolved tensions, missing dependencies, and meaningful gaps between sources. "
-        "Explain each finding in plain language for a non-technical project owner. "
-        "Every finding and proposal must use exact evidence from supplied documents. "
-        "Every proposal must state the concrete next action after human approval. "
-        "Never invent facts or infer beyond evidence.\n\n"
-        + _bounded_text(documents)
-    )
-
-    task = {
-        "capabilities": ("text", "reasoning"),
-        "prompt": prompt,
-        "system": SYSTEM,
-        "json_output": True,
-        "max_output_tokens": 4096,
-    }
+    chunks = _document_chunks(documents)
+    partials = []
     try:
         enabled = {
             "gemini": bool(os.environ.get("GEMINI_API_KEY")),
@@ -153,52 +162,104 @@ def analyze_with_ai(documents):
         if not registry:
             _telemetry(enabled=True, available=False, provider="NONE", reason="no_configured_provider_key")
             return {"enabled": True, "available": False, "reason": "No configured AI provider key"}
-        # Try configured providers in priority order. A quota/rate-limit failure
-        # on the preferred provider must not disable holistic analysis when a
-        # lower-priority configured provider is available.
+
         ordered = sorted(registry, key=lambda model: model.priority, reverse=True)
-        provider_errors = []
-        selected = None
-        validated = None
-        for model_spec in ordered:
-            provider = model_spec.provider
-            try:
-                candidate = ExecutionResult(provider, model_spec.model, configured_adapter(provider).execute(model_spec, task))
-                candidate_validated = _validate(candidate.output, documents)
-                selected = candidate
-                validated = candidate_validated
-                break
-            except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
-                provider_errors.append(f"{provider}:{type(exc).__name__}:{exc}")
-                continue
-        if selected is None or validated is None:
-            raise ProviderError("all configured AI providers failed: " + " | ".join(provider_errors))
+
+        def run_model(prompt):
+            errors = []
+            for model_spec in ordered:
+                provider = model_spec.provider
+                try:
+                    task = {
+                        "capabilities": ("text", "reasoning"),
+                        "prompt": prompt,
+                        "system": SYSTEM,
+                        "json_output": True,
+                        "max_output_tokens": 4096,
+                    }
+                    result = ExecutionResult(
+                        provider,
+                        model_spec.model,
+                        configured_adapter(provider).execute(model_spec, task),
+                    )
+                    return result
+                except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
+                    errors.append(f"{provider}:{type(exc).__name__}:{exc}")
+            raise ProviderError("all configured AI providers failed: " + " | ".join(errors))
+
+        # First pass: every readable Drive document is included in one or more
+        # bounded batches. Nothing is silently dropped because the workspace
+        # exceeds one model context window.
+        for index, chunk in enumerate(chunks, start=1):
+            prompt = (
+                f"Analyze workspace batch {index}/{len(chunks)} as evidence for one coherent project. "
+                "Do not treat this batch as the whole workspace. Identify concrete contradictions, "
+                "overlaps, obsolete decisions, unresolved tensions, dependencies, and meaningful gaps. "
+                "Use exact evidence quotes. Do not invent facts. Return only the required JSON.\n\n"
+                + chunk
+            )
+            result = run_model(prompt)
+            batch_validated = _validate(result.output, documents)
+            partials.append({
+                "batch": index,
+                "provider": result.provider,
+                "model": result.model,
+                "findings": batch_validated["findings"],
+                "proposals": batch_validated["proposals"],
+            })
+
+        # Second pass: synthesize the evidence from every batch into one
+        # project-level result. The final model sees the complete batch set,
+        # not just the first slice of the Drive.
+        synthesis_material = json.dumps(partials, ensure_ascii=False)
+        synthesis_prompt = (
+            "Synthesize the ENTIRE supplied Google Drive workspace as one coherent project. "
+            "The following are evidence-backed findings from EVERY workspace batch. "
+            "Merge duplicates, identify cross-document relationships, distinguish current state "
+            "from historical/obsolete material, and produce only the most important actionable "
+            "project-level findings and proposals. Do not invent anything. Every final proposal "
+            "must retain an exact quote from the original supplied documents. "
+            "Explain reasons in plain language for a non-technical project owner. "
+            "Return only the required JSON.\n\n"
+            + synthesis_material
+        )
+        final_result = run_model(synthesis_prompt)
+        final_validated = _validate(final_result.output, documents)
+        _telemetry(
+            enabled=True,
+            available=True,
+            provider=final_result.provider,
+            model=final_result.model,
+            batches=len(chunks),
+            documents=len(documents),
+            findings=len(final_validated["findings"]),
+            proposals=len(final_validated["proposals"]),
+        )
+        return {
+            "enabled": True,
+            "available": True,
+            "provider": final_result.provider,
+            "model": final_result.model,
+            "batches": len(chunks),
+            "documents": len(documents),
+            "findings": final_validated["findings"],
+            "proposals": final_validated["proposals"],
+        }
     except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
         _telemetry(
             enabled=True,
             available=False,
-            provider=provider if "provider" in locals() else "NONE",
+            provider="FALLBACK",
             error_type=type(exc).__name__,
             reason=str(exc),
+            batches=len(partials),
+            documents=len(documents),
         )
         return {
             "enabled": True,
             "available": False,
             "reason": f"semantic analysis unavailable: {exc}",
+            "batches": len(partials),
+            "documents": len(documents),
         }
-    _telemetry(
-        enabled=True,
-        available=True,
-        provider=selected.provider,
-        model=selected.model,
-        findings=len(validated["findings"]),
-        proposals=len(validated["proposals"]),
-    )
-    return {
-        "enabled": True,
-        "available": True,
-        "provider": selected.provider,
-        "model": selected.model,
-        "findings": validated["findings"],
-        "proposals": validated["proposals"],
-    }
+
