@@ -1,0 +1,25 @@
+name: AIPP audit bundle
+
+on:
+  push:
+    paths:
+      - .github/workflows/aipp-audit-bundle.yml
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sanitized repository bundle
+        shell: bash
+        run: |
+          rm -rf .git .github/workflows/aipp-audit-bundle.yml
+          find . -type f \\
+            \( -name '.env' -o -name '.env.*' -o -name 'credentials.json' -o -name '*service-account*.json' -o -name '*client_secret*.json' -o -name '*secret*.json' \) \\
+            -print -delete
+          zip -r AIPP_FULL_REPO_AUDIT.zip . -x 'AIPP_FULL_REPO_AUDIT.zip'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AIPP_FULL_REPO_AUDIT
+          path: AIPP_FULL_REPO_AUDIT.zip
+          retention-days: 7
