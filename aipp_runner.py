@@ -100,6 +100,44 @@ def load_project_intelligence():
     return value
 
 
+def build_workspace_map(project_boot_text, discovered_tasks, intelligence):
+    """Create a compact evidence-backed workspace model without another scan."""
+    evidence = intelligence.get("evidence") or []
+    areas = {}
+    for item in evidence:
+        kind = item.get("kind") or "reference"
+        areas.setdefault(kind, [])
+        if item.get("file_name") not in areas[kind]:
+            areas[kind].append(item.get("file_name"))
+    open_tasks = []
+    for item in discovered_tasks or []:
+        for task_id in item.get("task_ids", []):
+            open_tasks.append({"id": task_id, "source": item.get("name")})
+    proposals = intelligence.get("proposals") or []
+    findings = intelligence.get("findings") or []
+    recent = sorted(
+        [{"name": x.get("file_name"), "modifiedTime": x.get("modifiedTime"), "kind": x.get("kind")}
+         for x in evidence if x.get("modifiedTime")],
+        key=lambda x: str(x.get("modifiedTime")), reverse=True,
+    )[:10]
+    canonical = [
+        {"name": x.get("file_name"), "kind": x.get("kind"), "modifiedTime": x.get("modifiedTime")}
+        for x in evidence if x.get("file_name") in {"PROJECT_BOOT.md", "AIPP.md"}
+    ]
+    return {
+        "version": "1",
+        "status": "OPEN_WORK_REMAINING" if open_tasks or proposals else ("SIGNALS_FOUND" if findings else "EMPTY"),
+        "purpose_evidence": " ".join(str(project_boot_text or "").split())[:700],
+        "document_count": len(evidence),
+        "areas": [{"area": k, "document_count": len(v), "sources": v[:8]} for k, v in sorted(areas.items())],
+        "canonical_sources": canonical,
+        "open_tasks": open_tasks,
+        "finding_count": len(findings),
+        "proposal_count": len(proposals),
+        "recent_changes": recent,
+    }
+
+
 def reconcile_project_intelligence(state, intelligence):
     result = state
     lifecycle = result.setdefault("task_lifecycle", {})
@@ -236,10 +274,13 @@ def recommend_next_proposal(state, workspace):
 
 
 def initialize_state(state, workspace):
-    state = bootstrap_project_from_text(load_canonical_project_boot(workspace), state)
-    state = reconcile_discovered_tasks(state, load_discovered_tasks())
+    boot_text = load_canonical_project_boot(workspace)
+    discovered_tasks = load_discovered_tasks()
+    state = bootstrap_project_from_text(boot_text, state)
+    state = reconcile_discovered_tasks(state, discovered_tasks)
     intelligence = load_project_intelligence()
     state = reconcile_project_intelligence(state, intelligence)
+    state["workspace_map"] = build_workspace_map(boot_text, discovered_tasks, intelligence)
     lifecycle = state.setdefault("task_lifecycle", {})
     # If the current scan produced evidence-backed proposals, never manufacture
     # the old generic "workspace review" task. Only use the generic fallback when
