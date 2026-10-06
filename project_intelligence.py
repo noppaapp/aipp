@@ -218,7 +218,7 @@ def analyze_documents(documents):
                 })
                 proposals.append({
                     "action": "REVIEW", "target": f"{left['name']} / {right['name']}",
-                    "reason": "Two workspace sources are near-duplicates; review which one is authoritative.",
+                    "reason": "Çalışma alanında iki kaynak neredeyse aynı; hangisinin esas kaynak olduğu belirlenmeli.",
                     "finding_type": "near_duplicate", "evidence": evidence,
                     "requires_authority": True, "status": "PROPOSED",
                 })
@@ -232,7 +232,7 @@ def analyze_documents(documents):
         task_ids = sorted({m.upper().replace("_", "-").replace(" ", "-") for m in TASK_RE.findall(text)})
         if task_ids:
             continue
-        reason = "Actionable language found in workspace material without an existing TASK id."
+        reason = "Çalışma alanında henüz bir TASK kaydı olmayan yapılabilir bir öneri bulundu."
         action_match = ACTION_RE.search(text)
         evidence = [_evidence(
             doc,
