@@ -123,8 +123,16 @@ def _drive_context(include_ai=True):
     return boot_text, authority_text, candidates, intelligence
 
 
-def _run_aipp(command, task=None, max_attempts=3, include_ai=True):
-    boot_text, authority_text, candidates, intelligence = _drive_context(include_ai=include_ai)
+def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persisted_state=False):
+    session_state = _load_session_state()
+    if isinstance(session_state, dict) and isinstance(session_state.get("result"), dict):
+        session_state = session_state["result"]
+    else:
+        session_state = None
+    if reuse_persisted_state and session_state:
+        boot_text, authority_text, candidates, intelligence = "", "", [], {"version":"0","findings":[],"proposals":[]}
+    else:
+        boot_text, authority_text, candidates, intelligence = _drive_context(include_ai=include_ai)
 
     env = os.environ.copy()
     env["AIPP_PROJECT_BOOT_B64"] = base64.b64encode(boot_text.encode()).decode()
@@ -137,11 +145,6 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True):
     ).decode()
     # Carry the persisted runtime state into the runner so every command
     # continues the same session instead of rebuilding from an empty state.
-    session_state = _load_session_state()
-    if not isinstance(session_state, dict):
-        session_state = None
-    if session_state and isinstance(session_state.get("result"), dict):
-        session_state = session_state["result"]
     if session_state:
         env["AIPP_SESSION_STATE_B64"] = base64.b64encode(
             json.dumps(session_state, ensure_ascii=False).encode()
@@ -262,6 +265,14 @@ def run():
             raise RuntimeError("HALT: max_attempts must be between 1 and 5")
 
         body.pop("_runtime_token", None)
+        persisted = _load_session_state()
+        if isinstance(persisted, dict) and isinstance(persisted.get("result"), dict):
+            persisted = persisted["result"]
+        if command == "BAŞLA" and isinstance(persisted, dict) and persisted.get("task_lifecycle"):
+            return jsonify({"ok": True, "command": command, "result": persisted,
+                            "stdout": json.dumps(persisted, ensure_ascii=False),
+                            "stderr": "", "reused_session": True,
+                            "oauth_client_fingerprint": _oauth_client_fingerprint()}), 200
         if command == "APPROVE":
             if not task:
                 raise RuntimeError("HALT: --task is required.")
@@ -269,19 +280,27 @@ def run():
             folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
             if not folder_id:
                 raise RuntimeError("HALT: GDRIVE_FOLDER_ID is empty")
-            validation_code, validation_payload, _, validation_stderr = _run_aipp("REQUEST_APPROVAL", task, max_attempts, include_ai=True)
-            if validation_code != 0 or not validation_payload:
-                raise RuntimeError(validation_stderr or "HALT: approval request could not be validated")
-            future = validation_payload.get("task_lifecycle", {}).get("FUTURE", [])
-            pending_id = validation_payload.get("authority_gate", {}).get("pending_approval")
-            approved_task = next((item for item in future if item.get("id") == pending_id), None)
+            current = persisted if isinstance(persisted, dict) else None
+            if not current or not current.get("task_lifecycle"):
+                code0, current, _, err0 = _run_aipp("REQUEST_APPROVAL", task, max_attempts, include_ai=False)
+                if code0 != 0 or not current:
+                    raise RuntimeError(err0 or "HALT: approval request could not be validated")
+            future = current.get("task_lifecycle", {}).get("FUTURE", [])
+            approved_task = next((item for item in future if item.get("id") == task), None)
             if not approved_task:
                 raise RuntimeError("HALT: approval target is not a current FUTURE proposal")
             from datetime import datetime, timezone
             write_authority_approval(token, folder_id, approved_task, datetime.now(timezone.utc).isoformat())
-        runner_command = "EXECUTE" if command == "EXECUTE_APPROVED" else command
-        runner_ai = False if command == "EXECUTE_APPROVED" else True
-        code, payload, stdout, stderr = _run_aipp(runner_command, task, max_attempts, include_ai=runner_ai)
+        if command == "EXECUTE_APPROVED":
+            code, approved_payload, stdout1, stderr1 = _run_aipp("APPROVE", task, max_attempts, include_ai=False, reuse_persisted_state=True)
+            if code == 0 and approved_payload:
+                code, payload, stdout2, stderr2 = _run_aipp("EXECUTE", task, max_attempts, include_ai=False, reuse_persisted_state=True)
+                stdout, stderr = (stdout1 + "\n" + stdout2).strip(), (stderr1 + "\n" + stderr2).strip()
+            else:
+                payload, stdout, stderr = approved_payload, stdout1, stderr1
+        else:
+            reuse = command in {"EXECUTE", "VERIFY", "CONTINUE"}
+            code, payload, stdout, stderr = _run_aipp(command, task, max_attempts, include_ai=True, reuse_persisted_state=reuse)
         response_result = {
             "ok": code == 0,
             "command": command,
