@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import sys
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -108,8 +109,28 @@ def reconcile_project_intelligence(state, intelligence):
         for task in ([lifecycle.get(bucket)] if bucket == "NOW" else (lifecycle.get(bucket) or []))
         if isinstance(task, dict) and task.get("id")
     }
-    for index, proposal in enumerate(intelligence.get("proposals", []), start=1):
-        proposal_id_value = f"INTEL-{index:04d}"
+    # Replace the old generic fallback proposal with the current evidence-backed
+    # proposal set. A fresh Drive scan must not keep surfacing stale INTEL-0001.
+    future[:] = [
+        task for task in future
+        if not (
+            str(task.get("id", "")).startswith("INTEL-")
+            and task.get("source", {}).get("finding_type") == "workspace_review_required"
+        )
+    ]
+    existing_ids = {
+        task.get("id")
+        for bucket in ("NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED")
+        for task in ([lifecycle.get(bucket)] if bucket == "NOW" else (lifecycle.get(bucket) or []))
+        if isinstance(task, dict) and task.get("id")
+    }
+    for proposal in intelligence.get("proposals", []):
+        fingerprint = json.dumps({
+            "action": proposal.get("action"),
+            "target": proposal.get("target"),
+            "finding_type": proposal.get("finding_type"),
+        }, ensure_ascii=False, sort_keys=True)
+        proposal_id_value = "INTEL-" + hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:10].upper()
         if proposal_id_value in existing_ids:
             continue
         future.append({
@@ -214,26 +235,22 @@ def initialize_state(state, workspace):
     intelligence = load_project_intelligence()
     state = reconcile_project_intelligence(state, intelligence)
     lifecycle = state.setdefault("task_lifecycle", {})
-    if not lifecycle.get("NOW") and not lifecycle.get("FUTURE"):
-        existing_ids = {
-            task.get("id")
-            for bucket in ("DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED")
-            for task in (lifecycle.get(bucket) or [])
-            if isinstance(task, dict) and task.get("id")
-        }
-        if "INTEL-0001" not in existing_ids:
-            lifecycle.setdefault("FUTURE", []).append({
-                "id": "INTEL-0001",
-                "title": "Review: AIPP çalışma alanı",
-                "description": "AIPP çalışma alanında yürütülebilir bir TASK bulunmadı; mevcut kaynakların bütünsel olarak incelenmesi gerekiyor.",
-                "status": "PROPOSED",
-                "proposal_reason": "TASK adayı bulunmadığında AIPP boşta kalmamalı; insan onayına sunulacak tek bir sonraki aksiyon üretmelidir.",
-                "recommendation": "Mevcut çalışma alanını kanıta dayalı olarak inceleyip doğrulanabilir bir sonraki aksiyonu belirlemek.",
-                "source": {"engine": intelligence.get("engine", "deterministic-workspace-fallback"), "finding_type": "workspace_review_required", "target": "AIPP çalışma alanı", "evidence": []},
-                "change_action": "REVIEW",
-                "next_action": "Çalışma alanını inceleyip sonucu doğrulamak.",
-                "requires_authority": True,
-            })
+    # If the current scan produced evidence-backed proposals, never manufacture
+    # the old generic "workspace review" task. Only use the generic fallback when
+    # the workspace truly contains no actionable signal at all.
+    if not lifecycle.get("NOW") and not lifecycle.get("FUTURE") and not intelligence.get("proposals"):
+        lifecycle.setdefault("FUTURE", []).append({
+            "id": "INTEL-WORKSPACE-REVIEW",
+            "title": "AIPP çalışma alanını incele",
+            "description": "Açık bir TASK veya doğrulanabilir öneri bulunamadı.",
+            "status": "PROPOSED",
+            "proposal_reason": "Çalışma alanında açık bir TASK bulunamadı ve yeni bir kanıta dayalı öneri üretilemedi.",
+            "recommendation": "Yeni bir somut aksiyon oluşana kadar bekle.",
+            "source": {"engine": intelligence.get("engine", "deterministic-workspace-fallback"), "finding_type": "workspace_review_required", "evidence": []},
+            "change_action": "REVIEW",
+            "next_action": "Yeni bir kanıt veya TASK oluşmasını beklemek.",
+            "requires_authority": True,
+        })
     state = recommend_next_proposal(state, workspace)
     state["status"] = "PROPOSAL_READY"
     state["step"] = 1
