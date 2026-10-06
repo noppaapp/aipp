@@ -257,8 +257,15 @@ def initialize_state(state, workspace):
             "requires_authority": True,
         })
     state = recommend_next_proposal(state, workspace)
-    state["status"] = "PROPOSAL_READY"
-    state["step"] = 1
+    if state["task_lifecycle"].get("FUTURE"):
+        state["status"] = "PROPOSAL_READY"
+        state["step"] = 1
+    else:
+        # A scan with no unresolved queue is a real terminal state. Do not
+        # advertise PROPOSAL_READY with an empty proposal.
+        state["status"] = "COMPLETED"
+        state["step"] = 4
+        state.setdefault("authority_gate", {})["last_action"] = "SCAN_COMPLETE_NO_UNRESOLVED_FINDINGS"
     return state
 
 
