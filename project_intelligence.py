@@ -165,7 +165,7 @@ def analyze_documents(documents):
             findings.append({"type": "status_conflict", "task_id": task_id, "statuses": sorted(statuses), "evidence": evidence})
             proposals.append({
                 "action": "RECONCILE", "target": task_id,
-                "reason": f"Conflicting status values found for {task_id}: {', '.join(sorted(statuses))}.",
+                "reason": f"{task_id} için çelişen durumlar bulundu: {', '.join(sorted(statuses))}.",
                 "finding_type": "status_conflict", "evidence": evidence,
                 "requires_authority": True, "status": "PROPOSED",
             })
@@ -174,7 +174,7 @@ def analyze_documents(documents):
             findings.append({"type": "task_definition_drift", "task_id": task_id, "evidence": evidence})
             proposals.append({
                 "action": "RECONCILE", "target": task_id,
-                "reason": f"Multiple descriptions exist for {task_id}; canonical definition requires review.",
+                "reason": f"{task_id} için birden fazla açıklama bulundu; esas tanım gözden geçirilmeli.",
                 "finding_type": "task_definition_drift", "evidence": evidence,
                 "requires_authority": True, "status": "PROPOSED",
             })
@@ -197,7 +197,7 @@ def analyze_documents(documents):
                 })
                 proposals.append({
                     "action": "REVIEW", "target": doc["name"],
-                    "reason": "A newer workspace source overlaps canonical task state and may require re-sync.",
+                    "reason": "Daha yeni bir çalışma alanı kaynağı mevcut TASK durumuyla örtüşüyor; yeniden eşleştirme gerekebilir.",
                     "finding_type": "newer_supporting_source", "evidence": evidence,
                     "requires_authority": True, "status": "PROPOSED",
                 })
