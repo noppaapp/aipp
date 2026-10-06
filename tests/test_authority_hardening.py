@@ -106,3 +106,55 @@ def test_completion_gate_requires_completed_decision(monkeypatch):
     pid = state["task_lifecycle"]["NOW"]["proposal_id"]
     with pytest.raises(RuntimeError, match="completion approval not found"):
         aipp_runner.complete_task(state, "T-1", row(pid, "T-1", "APPROVED"))
+
+
+def test_completion_approval_completes_verified_task(monkeypatch):
+    monkeypatch.setenv("AIPP_REQUIRE_COMPLETION_GATE", "1")
+    task = {"id": "T-2", "title": "complete", "status": "FUTURE", "dependency_reason": "-"}
+    state = state_with(task)
+    state = aipp_runner.request_approval(state, "T-2")
+    state = aipp_runner.approve_task(state, "T-2", row(proposal_id(task), "T-2"))
+    state = aipp_runner.execute_task(state, ".")
+    state = aipp_runner.verify_task(state, ".")
+    pid = state["task_lifecycle"]["NOW"]["proposal_id"]
+    state = aipp_runner.complete_task(state, "T-2", row(pid, "T-2", "COMPLETED"))
+    assert state["status"] == "COMPLETED"
+    assert state["task_lifecycle"]["NOW"] is None
+    assert state["task_lifecycle"]["COMPLETED"][-1]["id"] == "T-2"
+
+
+def test_completion_approval_cannot_survive_payload_mutation(monkeypatch):
+    monkeypatch.setenv("AIPP_REQUIRE_COMPLETION_GATE", "1")
+    task = {
+        "id": "T-3", "title": "complete", "status": "FUTURE", "dependency_reason": "-",
+        "external_action": "LOCAL_ONLY", "target_path": "docs/a.txt", "target_content": "hello",
+    }
+    state = state_with(task)
+    state = aipp_runner.request_approval(state, "T-3")
+    state = aipp_runner.approve_task(state, "T-3", row(proposal_id(task), "T-3"))
+    state = aipp_runner.execute_task(state, ".")
+    state = aipp_runner.verify_task(state, ".")
+    state["task_lifecycle"]["NOW"]["target_content"] = "changed after verification"
+    pid = state["task_lifecycle"]["NOW"]["proposal_id"]
+    with pytest.raises(RuntimeError, match="binding digest mismatch"):
+        aipp_runner.complete_task(state, "T-3", row(pid, "T-3", "COMPLETED"))
+
+
+def test_signed_completion_approval_is_verified(monkeypatch):
+    pub = keypair(monkeypatch)
+    monkeypatch.setenv("AIPP_AUTHORITY_PUBKEY", pub)
+    task = gh_task()
+    task["proposal_id"] = proposal_id(task)
+    signed = signer.sign(task["proposal_id"], "GH-001", "COMPLETED", "alice")
+    assert is_completion_approved(signed + "\\n", task)
+    assert not is_completion_approved(row(task["proposal_id"], "GH-001", "COMPLETED"), task)
+
+
+def test_forged_signed_completion_is_rejected(monkeypatch):
+    pub = keypair(monkeypatch)
+    monkeypatch.setenv("AIPP_AUTHORITY_PUBKEY", pub)
+    task = gh_task()
+    task["proposal_id"] = proposal_id(task)
+    keypair(monkeypatch)
+    forged = signer.sign(task["proposal_id"], "GH-001", "COMPLETED", "mallory")
+    assert not is_completion_approved(forged + "\\n", task)

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import aipp_runner
+from aipp_authority import binding_digest
 
 
 def test_failed_verification_preserves_executable_state(tmp_path):
@@ -14,6 +15,7 @@ def test_failed_verification_preserves_executable_state(tmp_path):
         "title": "Recovery validation",
         "status": "APPROVED",
     }
+    task["binding_digest"] = binding_digest(task)
     state["task_lifecycle"]["NOW"] = task
 
     state = aipp_runner.execute_task(state, workspace)

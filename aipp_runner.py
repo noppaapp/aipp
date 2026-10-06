@@ -284,6 +284,8 @@ def initialize_state(state, workspace):
     state = reconcile_project_intelligence(state, intelligence)
     state["workspace_map"] = build_workspace_map(boot_text, discovered_tasks, intelligence)
     lifecycle = state.setdefault("task_lifecycle", {})
+    # A concrete passive proof signal must win over the generic workspace-review fallback.
+    state = recommend_next_proposal(state, workspace)
     # If the current scan produced evidence-backed proposals, never manufacture
     # the old generic "workspace review" task. Only use the generic fallback when
     # the workspace truly contains no actionable signal at all.
@@ -300,7 +302,6 @@ def initialize_state(state, workspace):
             "next_action": "Yeni bir kanıt veya TASK oluşmasını beklemek.",
             "requires_authority": True,
         })
-    state = recommend_next_proposal(state, workspace)
     if state["task_lifecycle"].get("FUTURE"):
         state["status"] = "PROPOSAL_READY"
         state["step"] = 1

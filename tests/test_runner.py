@@ -37,8 +37,10 @@ def test_bootstrap_is_ephemeral(tmp_path):
     assert not (tmp_path / "aipp_state.json").exists()
 
 
-def test_authority_gate_does_not_persist_across_sessions(tmp_path):
+def test_authority_gate_does_not_persist_across_sessions(tmp_path, monkeypatch):
     write_boot(tmp_path)
+    bootstrap = run("BAŞLA", cwd=tmp_path)
+    monkeypatch.setenv("AIPP_SESSION_STATE_B64", __import__("base64").b64encode(bootstrap.stdout.encode()).decode())
     result = run("REQUEST_APPROVAL", "TASK-01", cwd=tmp_path)
     state = json.loads(result.stdout)
     assert state["status"] == "AWAITING_AUTHORITY"
