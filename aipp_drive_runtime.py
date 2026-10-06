@@ -347,8 +347,17 @@ def discover_task_candidates(token, folder_id, include_documents=False):
                 "parents": file_info.get("parents", []),
             })
     mime_summary = ",".join(f"{key}:{value}" for key, value in sorted(mime_counts.items()))
-    print(f"DRIVE_DISCOVERY files={scanned_files} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} mime_types={mime_summary}")
-    return (candidates, documents) if include_documents else candidates
+    folder_count = sum(1 for file_info in files if file_info.get("mimeType") == FOLDER_MIME)
+    scan_summary = {
+        "files_scanned": scanned_files,
+        "documents_read": readable,
+        "documents_unreadable": unreadable,
+        "folders_scanned": folder_count,
+        "task_candidates": len(candidates),
+        "mime_types": mime_counts,
+    }
+    print(f"DRIVE_DISCOVERY files={scanned_files} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} folders={folder_count} mime_types={mime_summary}")
+    return (candidates, documents, scan_summary) if include_documents else candidates
 
 
 def reconcile_discovered_tasks(state, candidates):
