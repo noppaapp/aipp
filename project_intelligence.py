@@ -216,10 +216,30 @@ def analyze_documents(documents):
                     "type": "near_duplicate", "files": [left["name"], right["name"]],
                     "similarity": round(similarity, 3), "evidence": evidence,
                 })
+                left_time = _parse_time(left.get("modifiedTime"))
+                right_time = _parse_time(right.get("modifiedTime"))
+                if left_time and right_time and left_time != right_time:
+                    primary, secondary = (left, right) if left_time > right_time else (right, left)
+                    recommendation = (
+                        f"AIPP önerisi: daha yeni kaynak olan '{primary['name']}' esas kaynak kabul edilsin; "
+                        f"'{secondary['name']}' tarihsel/referans kaynak olarak ayrılsın."
+                    )
+                    next_action = (
+                        f"'{primary['name']}' esas kaynak olarak işaretlenmesini ve "
+                        f"'{secondary['name']}' kaynağının referans olarak korunmasını doğrula."
+                    )
+                else:
+                    recommendation = (
+                        f"AIPP önerisi: '{left['name']}' ile '{right['name']}' arasında esas kaynağı "
+                        "belirlemek için içerik ve tarih bilgisi insan tarafından doğrulansın."
+                    )
+                    next_action = "İki kaynağın esas/referans rolünü doğrula."
                 proposals.append({
                     "action": "REVIEW", "target": f"{left['name']} / {right['name']}",
-                    "reason": "Çalışma alanında iki kaynak neredeyse aynı; hangisinin esas kaynak olduğu belirlenmeli.",
+                    "reason": recommendation,
                     "finding_type": "near_duplicate", "evidence": evidence,
+                    "next_action": next_action,
+                    "recommendation": recommendation,
                     "requires_authority": True, "status": "PROPOSED",
                 })
 
