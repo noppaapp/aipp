@@ -300,6 +300,7 @@ def discover_task_candidates(token, folder_id, include_documents=False):
     files = list_workspace_tree(token, folder_id)
     candidates, readable, unreadable, scanned_files = [], 0, 0, 0
     documents = []
+    scanned_items = []
     mime_counts = {}
     for file_info in files:
         mime = file_info.get("mimeType", "")
@@ -320,6 +321,14 @@ def discover_task_candidates(token, folder_id, include_documents=False):
             })
         else:
             unreadable += 1
+        scanned_items.append({
+            "id": file_info.get("id"),
+            "name": file_info.get("name"),
+            "mimeType": mime,
+            "readable": readable_flag,
+            "analyzed": readable_flag,
+            "modifiedTime": file_info.get("modifiedTime"),
+        })
         haystack = f"{file_info.get('name', '')}\n{text or ''}"
         ids = sorted({m.upper().replace("_", "-").replace(" ", "-") for m in TASK_ID_RE.findall(haystack)})
         completed_ids = set()
@@ -355,6 +364,7 @@ def discover_task_candidates(token, folder_id, include_documents=False):
         "folders_scanned": folder_count,
         "task_candidates": len(candidates),
         "mime_types": mime_counts,
+        "files": scanned_items,
     }
     print(f"DRIVE_DISCOVERY files={scanned_files} readable={readable} unreadable={unreadable} task_candidates={len(candidates)} folders={folder_count} mime_types={mime_summary}")
     return (candidates, documents, scan_summary) if include_documents else candidates
