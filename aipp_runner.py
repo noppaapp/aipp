@@ -125,6 +125,7 @@ def reconcile_project_intelligence(state, intelligence):
                 "evidence": proposal.get("evidence", []),
             },
             "change_action": proposal.get("action"),
+            "next_action": proposal.get("next_action", ""),
             "requires_authority": True,
         })
         existing_ids.add(proposal_id_value)
