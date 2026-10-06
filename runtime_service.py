@@ -222,7 +222,7 @@ def run():
             folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
             if not folder_id:
                 raise RuntimeError("HALT: GDRIVE_FOLDER_ID is empty")
-            validation_code, validation_payload, _, validation_stderr = _run_aipp("REQUEST_APPROVAL", task, max_attempts, include_ai=False)
+            validation_code, validation_payload, _, validation_stderr = _run_aipp("REQUEST_APPROVAL", task, max_attempts, include_ai=True)
             if validation_code != 0 or not validation_payload:
                 raise RuntimeError(validation_stderr or "HALT: approval request could not be validated")
             future = validation_payload.get("task_lifecycle", {}).get("FUTURE", [])
@@ -232,7 +232,7 @@ def run():
                 raise RuntimeError("HALT: approval target is not a current FUTURE proposal")
             from datetime import datetime, timezone
             write_authority_approval(token, folder_id, approved_task, datetime.now(timezone.utc).isoformat())
-        code, payload, stdout, stderr = _run_aipp(command, task, max_attempts, include_ai=False)
+        code, payload, stdout, stderr = _run_aipp(command, task, max_attempts, include_ai=True)
         return (
             jsonify(
                 {
