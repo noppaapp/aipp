@@ -187,6 +187,9 @@ def status():
     if auth_error:
         return auth_error
     try:
+        local_saved = _load_session_state()
+        if isinstance(local_saved, dict) and isinstance(local_saved.get("result"), dict):
+            return jsonify(local_saved["result"])
         token = get_access_token()
         folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
         saved = read_session_state(token, folder_id) if folder_id else None
