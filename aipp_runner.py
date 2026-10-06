@@ -118,6 +118,7 @@ def reconcile_project_intelligence(state, intelligence):
             "description": proposal.get("reason"),
             "status": "PROPOSED",
             "proposal_reason": proposal.get("reason"),
+            "recommendation": proposal.get("recommendation", proposal.get("reason", "")),
             "source": {
                 "engine": intelligence.get("engine"),
                 "finding_type": proposal.get("finding_type"),
