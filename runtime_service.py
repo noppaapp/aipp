@@ -108,8 +108,9 @@ def _drive_context(include_ai=True):
         if authority_text is None:
             raise RuntimeError("HALT: AUTHORITY_LOG.md could not be read from Google Drive")
 
-    candidates, documents = discover_task_candidates(token, folder_id, include_documents=True)
+    candidates, documents, drive_scan = discover_task_candidates(token, folder_id, include_documents=True)
     intelligence = analyze_documents(documents)
+    intelligence["drive_scan"] = drive_scan
     if include_ai:
         semantic = analyze_with_ai(documents)
         intelligence["semantic"] = semantic
@@ -207,18 +208,8 @@ def status():
     if auth_error:
         return auth_error
     try:
-        local_saved = _load_session_state()
-        if isinstance(local_saved, dict) and isinstance(local_saved.get("result"), dict):
-            return jsonify(local_saved["result"])
-        token = get_access_token()
-        folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
-        saved = read_session_state(token, folder_id) if folder_id else None
-        if saved:
-            _save_session_state({"result": saved, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
-            return jsonify(saved)
-
-        # Status is a strictly read-only view.
-        # It must never scan Drive, run the runner, create proposals, or call AI.
+        # Status is a strictly read-only landing view.
+        # It never restores an old session and never runs the AIPP runner.
         # A real BAŞLAT command is handled only by POST /api/run.
         return jsonify(
             {
