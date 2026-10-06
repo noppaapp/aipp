@@ -292,7 +292,12 @@ def run():
             if not approved_task:
                 raise RuntimeError("HALT: approval target is not a current FUTURE proposal")
             from datetime import datetime, timezone
-            write_authority_approval(token, folder_id, approved_task, datetime.now(timezone.utc).isoformat())
+            if os.environ.get("AIPP_AUTHORITY_PUBKEY", "").strip():
+                # Signed-approval mode: the runtime must NOT write approvals.
+                # A human appends a row signed offline; the runner verifies it.
+                pass
+            else:
+                write_authority_approval(token, folder_id, approved_task, datetime.now(timezone.utc).isoformat())
         if command == "EXECUTE_APPROVED":
             # APPROVE has already been completed by the preceding operator action.
             # Re-running APPROVE here would search FUTURE again after the proposal
