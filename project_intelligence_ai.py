@@ -14,7 +14,7 @@ SYSTEM = """You are AIPP Project Intelligence.
 Analyze ONLY the supplied project material.
 Return JSON with exactly:
 {"findings":[{"type":string,"claim":string,"evidence":[{"file_name":string,"quote":string}]}],
- "proposals":[{"action":"REVIEW|RECONCILE|ADD","target":string,"reason":string,
+ "proposals":[{"action":"REVIEW|RECONCILE|ADD","target":string,"reason":string,"next_action":string,
  "evidence":[{"file_name":string,"quote":string}],"requires_authority":true}]}
 Never invent files, quotes, tasks, dates, or project facts.
 Do not approve, execute, or mutate anything.
@@ -70,6 +70,7 @@ def _validate(result, documents):
             "action": action,
             "target": str(proposal.get("target") or ""),
             "reason": str(proposal.get("reason") or ""),
+            "next_action": str(proposal.get("next_action") or ""),
             "evidence": valid_evidence,
             "requires_authority": True,
             "status": "PROPOSED",
