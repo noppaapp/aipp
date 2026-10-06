@@ -292,12 +292,17 @@ def run():
             from datetime import datetime, timezone
             write_authority_approval(token, folder_id, approved_task, datetime.now(timezone.utc).isoformat())
         if command == "EXECUTE_APPROVED":
-            code, approved_payload, stdout1, stderr1 = _run_aipp("APPROVE", task, max_attempts, include_ai=False, reuse_persisted_state=True)
-            if code == 0 and approved_payload:
-                code, payload, stdout2, stderr2 = _run_aipp("EXECUTE", task, max_attempts, include_ai=False, reuse_persisted_state=True)
-                stdout, stderr = (stdout1 + "\n" + stdout2).strip(), (stderr1 + "\n" + stderr2).strip()
-            else:
-                payload, stdout, stderr = approved_payload, stdout1, stderr1
+            # APPROVE has already been completed by the preceding operator action.
+            # Re-running APPROVE here would search FUTURE again after the proposal
+            # has already moved to NOW, causing a false "task not found" halt.
+            # Continue directly from the persisted APPROVED/NOW session state.
+            code, payload, stdout, stderr = _run_aipp(
+                "EXECUTE",
+                task,
+                max_attempts,
+                include_ai=False,
+                reuse_persisted_state=True,
+            )
         else:
             reuse = command in {"EXECUTE", "VERIFY", "CONTINUE"}
             code, payload, stdout, stderr = _run_aipp(command, task, max_attempts, include_ai=True, reuse_persisted_state=reuse)
