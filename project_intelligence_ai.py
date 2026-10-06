@@ -6,7 +6,7 @@ the Authority Gate. No AI output is ever auto-approved or executed.
 import json
 import os
 
-from ai.executor import execute
+from ai.executor import execute, ExecutionResult
 from ai.providers import configured_adapter, ProviderError
 from ai.model_router import DEFAULT_MODELS
 
@@ -163,7 +163,7 @@ def analyze_with_ai(documents):
         for model_spec in ordered:
             provider = model_spec.provider
             try:
-                candidate = execute(task, configured_adapter(provider), registry=(model_spec,))
+                candidate = ExecutionResult(provider, model_spec.model, configured_adapter(provider).execute(model_spec, task))
                 candidate_validated = _validate(candidate.output, documents)
                 selected = candidate
                 validated = candidate_validated
