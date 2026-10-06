@@ -368,9 +368,23 @@ def verify_task(state, workspace):
     task["verified_at"] = utc_now()
     state["task_lifecycle"]["COMPLETED"].append(task)
     state["task_lifecycle"]["NOW"] = None
-    state["status"] = "COMPLETED"
-    state["step"] = 4
-    state["authority_gate"]["last_action"] = "VERIFIED"
+
+    # Verification is not the end of an AIPP session. Reconcile the fresh
+    # workspace intelligence immediately so a completed proposal cannot block
+    # the next actionable proposal. Existing COMPLETED/FUTURE ids are preserved
+    # and only genuinely new proposals are surfaced.
+    intelligence = load_project_intelligence()
+    state = reconcile_project_intelligence(state, intelligence)
+
+    if state["task_lifecycle"].get("FUTURE"):
+        state["status"] = "PROPOSAL_READY"
+        state["step"] = 1
+        state["authority_gate"]["last_action"] = "VERIFIED_NEXT_PROPOSAL_READY"
+    else:
+        state["status"] = "COMPLETED"
+        state["step"] = 4
+        state["authority_gate"]["last_action"] = "VERIFIED"
+
     return state
 
 
