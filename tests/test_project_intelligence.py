@@ -103,3 +103,5 @@ def test_code_artifact_does_not_become_untracked_actionable_proposal():
     assert any(p["finding_type"] == "workspace_review_required" for p in result["proposals"])
     assert not any(p["finding_type"] == "actionable_untracked_idea" for p in result["proposals"])
     assert result["evidence"][0]["kind"] == "artifact"
+
+# CI trigger: no functional change.
