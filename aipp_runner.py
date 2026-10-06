@@ -12,7 +12,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from aipp_project_bootstrap import bootstrap_project_from_text
-from aipp_authority import AUTHORITY_LOG, AUTHORITY_ENV, is_approved, proposal_id
+from aipp_authority import AUTHORITY_LOG, AUTHORITY_ENV, binding_digest, is_approved, is_completion_approved, proposal_id
 from aipp_drive_runtime import reconcile_discovered_tasks
 from runtime.continuation import ContinuationHalt, continue_verified
 from runtime.github_external import ExternalActionHalt, execute_bounded_github_proof
@@ -22,6 +22,7 @@ AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
 DISCOVERED_TASKS_ENV = "AIPP_DISCOVERED_TASKS_B64"
 PROJECT_INTELLIGENCE_ENV = "AIPP_PROJECT_INTELLIGENCE_B64"
+COMPLETION_GATE_ENV = "AIPP_REQUIRE_COMPLETION_GATE"
 
 
 def utc_now():
@@ -276,19 +277,14 @@ def find_future_task(state, task_id):
 def request_approval(state, task_id):
     task = find_future_task(state, task_id)
     if task is None:
-        # The panel may hold the proposal ID from the immediately preceding
-        # BAŞLA scan while a fresh Drive/AI reconciliation has regenerated the
-        # in-memory proposal set. Never silently approve an arbitrary task:
-        # only recover when there is exactly one current FUTURE proposal.
-        future = [
-            item for item in state["task_lifecycle"].get("FUTURE", [])
+        current = [
+            item.get("id")
+            for item in state["task_lifecycle"].get("FUTURE", [])
             if isinstance(item, dict) and item.get("id")
         ]
-        if len(future) == 1:
-            task = future[0]
-            task["id"] = task_id
-        else:
-            raise RuntimeError(f"HALT: FUTURE task not found: {task_id}")
+        raise RuntimeError(
+            f"HALT: FUTURE task not found: {task_id} (current FUTURE ids: {current}). Re-run BAŞLA."
+        )
     state["authority_gate"]["pending_approval"] = task_id
     state["authority_gate"]["pending_proposal_id"] = proposal_id(task)
     state["authority_gate"]["last_action"] = "APPROVAL_REQUESTED"
@@ -313,6 +309,7 @@ def approve_task(state, task_id, authority_log=None):
     state["task_lifecycle"]["FUTURE"].remove(task)
     task["status"] = "APPROVED"
     task["proposal_id"] = actual_proposal
+    task["binding_digest"] = binding_digest(task)
     state["authority_gate"]["pending_approval"] = None
     state["authority_gate"]["pending_proposal_id"] = None
     state["authority_gate"]["last_action"] = "APPROVED"
@@ -328,6 +325,10 @@ def execute_task(state, workspace):
         raise RuntimeError("HALT: No task in NOW state")
     if task.get("status") not in {"APPROVED", "NOW"}:
         raise RuntimeError(f"HALT: Task is not executable: {task.get('status')}")
+    if task.get("binding_digest") != binding_digest(task) and (
+        task.get("binding_digest") is not None or task.get("status") == "APPROVED"
+    ):
+        raise RuntimeError("HALT: Task payload changed after approval (binding digest mismatch)")
     external_result = None
     try:
         if task.get("external_action") == "GITHUB_PROOF_BRANCH":
@@ -376,10 +377,25 @@ def verify_task(state, workspace):
         external = artifact.get("external_result") or {}
         if not external.get("repository") or not external.get("branch") or not external.get("pull_request"):
             raise RuntimeError("HALT: Target project execution verification failed")
-    task["status"] = "COMPLETED"
+    if task.get("binding_digest") is not None and task["binding_digest"] != binding_digest(task):
+        raise RuntimeError("HALT: Task payload changed after approval (binding digest mismatch)")
     task["verified_at"] = utc_now()
+    if os.environ.get(COMPLETION_GATE_ENV, "").strip() == "1":
+        task["status"] = "VERIFIED"
+        state["authority_gate"]["pending_completion"] = task["id"]
+        state["authority_gate"]["last_action"] = "VERIFICATION_PASSED_AWAITING_COMPLETION_AUTHORITY"
+        state["status"] = "AWAITING_COMPLETION_AUTHORITY"
+        state["step"] = 3
+        return state
+    return _finalize_completion(state, task)
+
+
+def _finalize_completion(state, task):
+    task["status"] = "COMPLETED"
+    task.setdefault("verified_at", utc_now())
     state["task_lifecycle"]["COMPLETED"].append(task)
     state["task_lifecycle"]["NOW"] = None
+    state.setdefault("authority_gate", {})["pending_completion"] = None
 
     # Verification is not the end of an AIPP session. Reconcile the fresh
     # workspace intelligence immediately so a completed proposal cannot block
@@ -398,6 +414,19 @@ def verify_task(state, workspace):
         state["authority_gate"]["last_action"] = "VERIFIED"
 
     return state
+
+
+def complete_task(state, task_id, authority_log=None):
+    """Authority-gated VERIFIED -> COMPLETED transition."""
+    task = state["task_lifecycle"].get("NOW")
+    if not task or task.get("id") != task_id or task.get("status") != "VERIFIED":
+        raise RuntimeError(f"HALT: No VERIFIED task awaiting completion authority: {task_id}")
+    if task.get("binding_digest") is not None and task["binding_digest"] != binding_digest(task):
+        raise RuntimeError("HALT: Task payload changed after approval (binding digest mismatch)")
+    source = load_canonical_authority_log() if authority_log is None else authority_log
+    if not is_completion_approved(source, task):
+        raise RuntimeError(f"HALT: Canonical completion approval not found: {task.get('proposal_id')}")
+    return _finalize_completion(state, task)
 
 
 def continue_execution(state, workspace, max_attempts=3):
@@ -464,6 +493,10 @@ def main():
         state = execute_task(state, ".")
     elif command == "VERIFY":
         state = verify_task(state, ".")
+    elif command == "COMPLETE":
+        if not args.task:
+            raise RuntimeError("HALT: --task is required for COMPLETE.")
+        state = complete_task(state, args.task)
     elif command == "CONTINUE":
         if not args.task:
             raise RuntimeError("HALT: --task is required for CONTINUE.")
