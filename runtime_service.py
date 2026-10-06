@@ -23,6 +23,22 @@ from project_intelligence_ai import analyze_with_ai
 
 app = Flask(__name__)
 ROOT = Path(__file__).resolve().parent
+SESSION_STATE_PATH = Path("/tmp/aipp_session_state.json")
+
+def _load_session_state():
+    try:
+        if SESSION_STATE_PATH.exists():
+            return json.loads(SESSION_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return None
+
+def _save_session_state(payload):
+    try:
+        SESSION_STATE_PATH.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:
+        print(f"AIPP_SESSION_STATE_SAVE_ERROR type={type(exc).__name__}", flush=True)
+
 
 
 def _token_fingerprint(value):
@@ -169,6 +185,9 @@ def status():
     if auth_error:
         return auth_error
     try:
+        saved = _load_session_state()
+        if saved and saved.get("result"):
+            return jsonify(saved["result"])
         boot, authority, candidates, intelligence = _drive_context(include_ai=False)
         return jsonify(
             {
@@ -233,18 +252,19 @@ def run():
             from datetime import datetime, timezone
             write_authority_approval(token, folder_id, approved_task, datetime.now(timezone.utc).isoformat())
         code, payload, stdout, stderr = _run_aipp(command, task, max_attempts, include_ai=True)
+        response_result = {
+            "ok": code == 0,
+            "command": command,
+            "task": task,
+            "result": payload,
+            "stdout": stdout,
+            "stderr": stderr,
+            "oauth_client_fingerprint": _oauth_client_fingerprint(),
+        }
+        if code == 0 and payload:
+            _save_session_state({"result": payload, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
         return (
-            jsonify(
-                {
-                    "ok": code == 0,
-                    "command": command,
-                    "task": task,
-                    "result": payload,
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "oauth_client_fingerprint": _oauth_client_fingerprint(),
-                }
-            ),
+            jsonify(response_result),
             200 if code == 0 else 422,
         )
     except Exception as exc:
