@@ -50,13 +50,28 @@ def runtime_request(path, method='GET', payload=None):
     if method == 'POST':
         body['_runtime_token'] = RUNTIME_TOKEN
 
-    response = requests.request(
-        method,
-        RUNTIME_URL + path,
-        headers=headers,
-        json=body if method == 'POST' else None,
-        timeout=310,
-    )
+    attempts = 3 if method == 'GET' else 1
+    last_response = None
+    for attempt in range(attempts):
+        response = requests.request(
+            method,
+            RUNTIME_URL + path,
+            headers=headers,
+            json=body if method == 'POST' else None,
+            timeout=310,
+        )
+        last_response = response
+        if response.ok:
+            break
+        # Render can briefly return 502/503/504 while a Runtime instance is
+        # being replaced. Retry GET/status only; never retry POST because it
+        # may already have executed an AIPP command.
+        if method != 'GET' or response.status_code not in (502, 503, 504) or attempt == attempts - 1:
+            break
+        import time
+        time.sleep(2)
+
+    response = last_response
     try:
         data = response.json()
     except ValueError:
