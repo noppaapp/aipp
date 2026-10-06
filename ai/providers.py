@@ -47,6 +47,7 @@ class GeminiAdapter:
             "flash": "gemini-3.8-flash",
         }.get(model.model, model.model)
         payload = {
+            "systemInstruction": {"parts": [{"text": str(task.get("system") or "")}]},
             "contents": [{"role": "user", "parts": [{"text": _task_prompt(task)}]}],
             "generationConfig": {
                 "temperature": 0.1,
