@@ -76,7 +76,40 @@ def _validate(result, documents):
             "status": "PROPOSED",
             "source": "ai-semantic-analysis",
         })
-    return {"proposals": clean, "findings": result.get("findings", [])}
+    findings = []
+    for finding in result.get("findings", []):
+        if not isinstance(finding, dict):
+            continue
+        evidence = finding.get("evidence")
+        if not isinstance(evidence, list):
+            continue
+        valid_evidence = []
+        for item in evidence:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("file_name") or "")
+            quote = str(item.get("quote") or "")
+            if name in source_text and quote and quote in source_text[name]:
+                valid_evidence.append({"file_name": name, "quote": quote})
+        if valid_evidence:
+            findings.append({
+                "type": str(finding.get("type") or "finding"),
+                "claim": str(finding.get("claim") or ""),
+                "evidence": valid_evidence,
+            })
+    if not clean and findings:
+        for index, finding in enumerate(findings, start=1):
+            clean.append({
+                "action": "REVIEW",
+                "target": f"Finding {index}: {finding['type']}",
+                "reason": finding["claim"],
+                "next_action": "Kaynak belgeleri karşılaştırıp gerekli düzeltmeyi hazırlamak ve uygulama öncesinde doğrulamak.",
+                "evidence": finding["evidence"],
+                "requires_authority": True,
+                "status": "PROPOSED",
+                "source": "ai-semantic-analysis-finding",
+            })
+    return {"proposals": clean, "findings": findings}
 
 
 def _telemetry(**fields):
@@ -94,11 +127,16 @@ def analyze_with_ai(documents):
         return {"enabled": True, "available": False, "reason": "no readable documents"}
 
     prompt = (
-        "Analyze this workspace for contradictions, obsolete decisions, missing "
-        "follow-up work, redundant material, and meaningful changes between sources. "
-        "Do not infer beyond evidence.\n\n"
+        "Analyze the supplied workspace as one coherent project, not as isolated files. "
+        "Identify concrete contradictions, overlaps, duplicated concepts, obsolete decisions, "
+        "unresolved tensions, missing dependencies, and meaningful gaps between sources. "
+        "Explain each finding in plain language for a non-technical project owner. "
+        "Every finding and proposal must use exact evidence from supplied documents. "
+        "Every proposal must state the concrete next action after human approval. "
+        "Never invent facts or infer beyond evidence.\n\n"
         + _bounded_text(documents)
     )
+
     task = {
         "capabilities": ("text", "reasoning"),
         "prompt": prompt,
