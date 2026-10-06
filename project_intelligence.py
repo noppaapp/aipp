@@ -3,6 +3,7 @@
 Evidence-first only. It never approves, executes, or mutates project content.
 """
 import re
+import difflib
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -55,6 +56,33 @@ def _similarity(a, b):
     if not left or not right:
         return 0.0
     return len(left & right) / len(left | right)
+
+def _content_differences(left_text, right_text, limit=4):
+    """Return a small, evidence-friendly set of meaningful content differences."""
+    def meaningful_lines(text):
+        lines = []
+        for raw in str(text or "").splitlines():
+            line = " ".join(raw.split())
+            if len(line) >= 20:
+                lines.append(line)
+        return lines
+
+    left_lines = meaningful_lines(left_text)
+    right_lines = meaningful_lines(right_text)
+    matcher = difflib.SequenceMatcher(None, left_lines, right_lines, autojunk=False)
+    differences = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        left = left_lines[i1:i2]
+        right = right_lines[j1:j2]
+        if not left and not right:
+            continue
+        differences.append({"type": tag, "left": left[:2], "right": right[:2]})
+        if len(differences) >= limit:
+            break
+    return differences
+
 
 
 def _task_records(doc):
@@ -208,13 +236,14 @@ def analyze_documents(documents):
                 continue
             similarity = _similarity(left.get("text"), right.get("text"))
             if similarity >= 0.92 and left["name"] != right["name"]:
+                differences = _content_differences(left.get("text"), right.get("text"))
                 evidence = [
                     _evidence(left, f"content similarity={similarity:.3f}"),
                     _evidence(right, f"content similarity={similarity:.3f}"),
                 ]
                 findings.append({
                     "type": "near_duplicate", "files": [left["name"], right["name"]],
-                    "similarity": round(similarity, 3), "evidence": evidence,
+                    "similarity": round(similarity, 3), "differences": differences, "evidence": evidence,
                 })
                 left_time = _parse_time(left.get("modifiedTime"))
                 right_time = _parse_time(right.get("modifiedTime"))
@@ -234,10 +263,19 @@ def analyze_documents(documents):
                         "belirlemek için içerik ve tarih bilgisi insan tarafından doğrulansın."
                     )
                     next_action = "İki kaynağın esas/referans rolünü doğrula."
+                if differences:
+                    reason = (
+                        recommendation + " İçerik karşılaştırmasında farklı bölümler de bulundu; "
+                        "AIPP bunları karar kanıtı olarak sunacak, doğruluğu varsaymayacak."
+                    )
+                    next_action = next_action + " Ayrıca farklı içerik bölümlerinin kanonik kuralla uyumunu doğrula."
+                else:
+                    reason = recommendation
                 proposals.append({
                     "action": "REVIEW", "target": f"{left['name']} / {right['name']}",
-                    "reason": recommendation,
+                    "reason": reason,
                     "finding_type": "near_duplicate", "evidence": evidence,
+                    "differences": differences,
                     "next_action": next_action,
                     "recommendation": recommendation,
                     "requires_authority": True, "status": "PROPOSED",
