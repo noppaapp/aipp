@@ -114,7 +114,7 @@ def reconcile_project_intelligence(state, intelligence):
             continue
         future.append({
             "id": proposal_id_value,
-            "title": f"Review: {proposal.get('target')}",
+            "title": f"İncele: {proposal.get('target')}",
             "description": proposal.get("reason"),
             "status": "PROPOSED",
             "proposal_reason": proposal.get("reason"),
