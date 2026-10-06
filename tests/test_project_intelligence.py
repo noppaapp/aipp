@@ -35,6 +35,7 @@ def test_generic_note_does_not_become_a_task():
     result = analyze_documents([
         {"id": "1", "name": "notes.md", "text": "A useful observation with no requested action."},
     ])
+    assert any(p["finding_type"] == "workspace_review_required" for p in result["proposals"])
     assert not any(p["finding_type"] == "actionable_untracked_idea" for p in result["proposals"])
 
 
@@ -99,5 +100,6 @@ def test_code_artifact_does_not_become_untracked_actionable_proposal():
             "text": "Next step: implement the runner and add the missing verification.",
         },
     ])
+    assert any(p["finding_type"] == "workspace_review_required" for p in result["proposals"])
     assert not any(p["finding_type"] == "actionable_untracked_idea" for p in result["proposals"])
     assert result["evidence"][0]["kind"] == "artifact"
