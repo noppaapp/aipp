@@ -268,7 +268,17 @@ def execute_task(state, workspace):
     artifact_dir = Path(workspace) / ARTIFACT_DIR
     artifact_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_dir / f"{task['id']}-execution.json"
-    save_json(artifact_path, {"task_id": task["id"], "title": task.get("title"), "execution_mode": state.get("execution_mode", "REAL"), "executed_at": utc_now(), "runner": state.get("runner_engine"), "external_result": external_result, "result": "EXECUTED"})
+    intelligence = load_project_intelligence()
+    review_result = None
+    if task.get("source", {}).get("finding_type") == "workspace_review_required":
+        review_result = {
+            "type": "workspace_review",
+            "documents_scanned": intelligence.get("documents_scanned", 0),
+            "findings": intelligence.get("findings", []),
+            "proposals": intelligence.get("proposals", []),
+            "completed_action": "Bütünsel çalışma alanı incelemesi oluşturuldu ve doğrulama için kaydedildi.",
+        }
+    save_json(artifact_path, {"task_id": task["id"], "title": task.get("title"), "execution_mode": state.get("execution_mode", "REAL"), "executed_at": utc_now(), "runner": state.get("runner_engine"), "external_result": external_result, "review_result": review_result, "result": "EXECUTED"})
     task["status"] = "EXECUTED"
     task["artifact"] = str(artifact_path).replace("\\", "/")
     state["status"] = "EXECUTED"
