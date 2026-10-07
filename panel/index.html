@@ -59,7 +59,7 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
 <div class="eyebrow" style="margin-top:18px">AIPP NE ÖNERİYOR?</div>
 <div class="callout" id="reviewRecommendation">AIPP'nin önerisi burada açıklanır.</div><div class="eyebrow" style="margin-top:18px">ONAYDAN SONRA NE YAPILACAK?</div><div class="callout" id="reviewNextAction">AIPP'nin gerçekleştireceği aksiyon burada açıklanır.</div>
 <div class="actions">
-<button class="primary choice" id="requestApprovalBtn" onclick="requestApproval()">KARARIMI SUN</button>
+<button class="primary choice" id="requestApprovalBtn" onclick="approveHuman()">ONAYLA</button>
 
 </div>
 <div class="small" style="margin-top:12px">Onay vermeden gerçek uygulama başlatılmaz.</div>
@@ -175,7 +175,7 @@ async function requestApproval(){
 }
 async function approveHuman(){if(!suggestedTask)return;const b=document.getElementById('approveBtn');b.disabled=true;b.textContent='KAYDEDİLİYOR...';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'APPROVE',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Onay kaydedilemedi.');saveRunState(data);render(data)}catch(e){hideFlow();setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message}finally{b.disabled=false;b.textContent='ONAYLA'}}
 
-async function executeApproved(){const b=document.getElementById('executeBtn');b.disabled=true;b.textContent='UYGULANIYOR...';setVisible('executeCard',false);setVisible('workingCard',true);document.getElementById('status').textContent='UYGULANIYOR';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'EXECUTE_APPROVED',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Uygulama tamamlanamadı.');saveRunState(data);render(data)}catch(e){hideFlow();setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message||'Uygulama tamamlanamadı.'}finally{b.disabled=false;b.textContent='UYGULA'}}
+async function executeApproved(){const b=document.getElementById('executeBtn');b.disabled=true;b.textContent='UYGULANIYOR...';setVisible('executeCard',false);setVisible('workingCard',true);document.getElementById('status').textContent='UYGULANIYOR';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'EXECUTE_APPROVED',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Uygulama tamamlanamadı.');saveRunState(data);const v=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'VERIFY',task:suggestedTask})});const verified=await v.json();if(!v.ok)throw new Error(verified.error||'Doğrulama tamamlanamadı.');saveRunState(verified);render(verified)}catch(e){hideFlow();setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message||'İşlem tamamlanamadı.'}finally{b.disabled=false;b.textContent='UYGULA'}}
 let refreshBusy=false;
 function hasLifecycleState(data){const s=normalizeState(data);return !!(s&&s.task_lifecycle&&Array.isArray(s.task_lifecycle.FUTURE)&&Array.isArray(s.task_lifecycle.COMPLETED))}
 function hasActiveRunState(data){const s=normalizeState(data),l=s.task_lifecycle||{},g=s.authority_gate||{},status=String(s.status||'').toUpperCase();return !!((l.FUTURE||[]).length||(l.NOW&&l.NOW.id)||g.pending_approval||['RUNNING','EXECUTING','IN_PROGRESS','PROPOSAL_READY','AWAITING_AUTHORITY','APPROVED'].includes(status))}
