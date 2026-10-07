@@ -78,3 +78,28 @@ def test_runner_creates_passive_next_proposal_from_explicit_proof_signal(tmp_pat
     assert "github" not in json.dumps(proposal).lower()
     assert state["authority_gate"]["pending_approval"] is None
     assert state["authority_gate"]["last_action"] == "AUTONOMOUS_PROPOSAL_CREATED"
+
+
+def test_project_intelligence_persists_drive_scan_for_panel_state():
+    from aipp_runner import default_state, reconcile_project_intelligence
+
+    intelligence = {
+        "version": "2",
+        "engine": "deterministic-evidence-reconciliation",
+        "documents_scanned": 15,
+        "findings": [{"type": "near_duplicate"}],
+        "proposals": [{"action": "REVIEW", "target": "source"}],
+        "drive_scan": {
+            "files_scanned": 15,
+            "documents_read": 15,
+            "documents_unreadable": 0,
+            "folders_scanned": 2,
+        },
+        "semantic": {"enabled": False, "available": False},
+    }
+
+    state = reconcile_project_intelligence(default_state(), intelligence)
+
+    assert state["project_intelligence"]["drive_scan"]["files_scanned"] == 15
+    assert state["project_intelligence"]["drive_scan"]["documents_read"] == 15
+    assert state["project_intelligence"]["documents_scanned"] == 15
