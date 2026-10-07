@@ -285,7 +285,17 @@ def run():
                 future
                 or now
                 or gate.get("pending_approval")
-                or status in {"RUNNING", "EXECUTING", "IN_PROGRESS", "AWAITING_AUTHORITY", "APPROVED"}
+                or status in {
+                    "RUNNING",
+                    "EXECUTING",
+                    "IN_PROGRESS",
+                    "AWAITING_AUTHORITY",
+                    "APPROVED",
+                    "COMPLETED",
+                    "VERIFIED",
+                    "DONE",
+                    "SUCCESS",
+                }
             )
             if active_session:
                 return jsonify({"ok": True, "command": command, "result": persisted,
