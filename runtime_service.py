@@ -272,10 +272,26 @@ def run():
         if isinstance(persisted, dict) and isinstance(persisted.get("result"), dict):
             persisted = persisted["result"]
         if command == "BAŞLA" and isinstance(persisted, dict) and persisted.get("task_lifecycle"):
-            return jsonify({"ok": True, "command": command, "result": persisted,
-                            "stdout": json.dumps(persisted, ensure_ascii=False),
-                            "stderr": "", "reused_session": True,
-                            "oauth_client_fingerprint": _oauth_client_fingerprint()}), 200
+            # Reuse only a genuinely active session. A persisted snapshot with
+            # an empty FUTURE queue can contain stale intelligence from a
+            # previous scan; returning it unchanged makes the panel fall back
+            # to HAZIR forever even though the workspace has fresh proposals.
+            lifecycle = persisted.get("task_lifecycle", {})
+            future = lifecycle.get("FUTURE", [])
+            now = lifecycle.get("NOW")
+            gate = persisted.get("authority_gate", {})
+            status = str(persisted.get("status") or "").upper()
+            active_session = bool(
+                future
+                or now
+                or gate.get("pending_approval")
+                or status in {"RUNNING", "EXECUTING", "IN_PROGRESS", "AWAITING_AUTHORITY", "APPROVED"}
+            )
+            if active_session:
+                return jsonify({"ok": True, "command": command, "result": persisted,
+                                "stdout": json.dumps(persisted, ensure_ascii=False),
+                                "stderr": "", "reused_session": True,
+                                "oauth_client_fingerprint": _oauth_client_fingerprint()}), 200
         if command == "REQUEST_APPROVAL" and task:
             # The panel can hold a proposal id from an earlier scan while the
             # persisted session has already been reconciled. Never send that
