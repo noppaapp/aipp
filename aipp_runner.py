@@ -196,12 +196,17 @@ def reconcile_project_intelligence(state, intelligence):
         existing_ids.add(proposal_id_value)
     future.sort(key=lambda item: (-int(item.get("priority", 50)), str(item.get("id", ""))))
     result["intelligence_queue"] = [item.get("id") for item in future if item.get("id")]
+    # Persist the same evidence envelope that produced the workspace map.
+    # The panel status endpoint restores this snapshot without rescanning Drive,
+    # so dropping drive_scan here would create a false "0 files scanned" view.
     result["project_intelligence"] = {
         "version": intelligence.get("version"), "engine": intelligence.get("engine"),
         "documents_scanned": intelligence.get("documents_scanned", 0),
         "finding_count": len(intelligence.get("findings", [])),
         "proposal_count": len(intelligence.get("proposals", [])),
         "queue_count": len(future),
+        "drive_scan": intelligence.get("drive_scan", {}),
+        "semantic": intelligence.get("semantic", {}),
         "queue": [{"id":x.get("id"),"title":x.get("title"),"priority":x.get("priority",50),"finding_type":x.get("source",{}).get("finding_type")} for x in future],
     }
     if intelligence.get("proposals"):
