@@ -6,6 +6,7 @@ on:
     paths:
       - "AIPP.md"
       - "aipp_*.py"
+      - "project_intelligence_ai.py"
       - "runtime/**"
       - "tests/**"
       - "panel/**"
