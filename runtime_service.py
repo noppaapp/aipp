@@ -163,6 +163,16 @@ def _drive_context(include_ai=True):
                 intelligence.setdefault("project_semantic", {})["NOPPA"] = {
                     "enabled": False, "available": False, "reason": "status endpoint does not run AI"
                 }
+            print(
+                "NOPPA_DRIVE_DISCOVERY "
+                f"files={noppa_scan.get('files_scanned', 0)} "
+                f"readable={noppa_scan.get('documents_read', len(noppa_documents))} "
+                f"unreadable={noppa_scan.get('documents_unreadable', 0)} "
+                f"findings={len(noppa_intelligence.get('findings', []))} "
+                f"proposals={len(noppa_intelligence.get('proposals', []))} "
+                f"ai={intelligence['project_scopes']['NOPPA'].get('ai_status', 'NOT_RUN')}",
+                flush=True,
+            )
         except Exception as exc:
             print(f"NOPPA_DRIVE_DISCOVERY_ERROR type={type(exc).__name__} message={str(exc)[:240]}", flush=True)
             intelligence["project_scopes"]["NOPPA"] = {
@@ -344,9 +354,8 @@ def run():
             now = lifecycle.get("NOW")
             gate = persisted.get("authority_gate", {})
             status = str(persisted.get("status") or "").upper()
-            active_session = bool(
-                future
-                or now
+            protected_session = bool(
+                now
                 or gate.get("pending_approval")
                 or status in {
                     "RUNNING",
@@ -356,7 +365,11 @@ def run():
                     "APPROVED",
                 }
             )
-            if active_session:
+            active_session = bool(future or protected_session)
+            # An explicit panel start can refresh a proposal-only snapshot,
+            # but must never discard a task already in NOW or awaiting approval.
+            force_refresh = bool(body.get("force_refresh"))
+            if active_session and not (force_refresh and not protected_session):
                 return jsonify({"ok": True, "command": command, "result": persisted,
                                 "stdout": json.dumps(persisted, ensure_ascii=False),
                                 "stderr": "", "reused_session": True,
