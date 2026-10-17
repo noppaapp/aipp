@@ -152,12 +152,12 @@ function hideFlow(){['decisionCard','reviewCard','waitingCard','executeCard','wo
 function localizeProposalText(value){
   if(!value)return value;
   let s=String(value);
-  // Translate English proposal prefixes without changing filenames or task IDs.
-  s=s.replace(/^\\s*Review:\\s*/i,'İncele: ');
+  // Keep filenames and task IDs intact while translating known English proposal text.
+  s=s.replace(/^Review:/i,'İncele:');
   const translations=[
-    [/Two workspace sources are near-duplicates; review which one is authoritative\\.?/gi,'Çalışma alanında iki kaynak neredeyse aynı; hangisinin esas kaynak olduğu belirlenmeli.'],
-    [/Actionable language found in workspace material without an existing TASK id\\.?/gi,'Çalışma alanında henüz bir görev kaydıyla ilişkilendirilmemiş, eyleme dönüştürülebilir bir ifade bulundu.'],
-    [/A newer workspace source overlaps canonical task state and may require re-sync\\.?/gi,'Daha yeni bir çalışma alanı kaynağı mevcut görev durumuyla örtüşüyor; yeniden eşleştirme gerekebilir.'],
+    [/Two workspace sources are near-duplicates; review which one is authoritative/gi,'Çalışma alanında iki kaynak neredeyse aynı; hangisinin esas kaynak olduğu belirlenmeli'],
+    [/Actionable language found in workspace material without an existing TASK id/gi,'Çalışma alanında henüz bir görev kaydıyla ilişkilendirilmemiş, eyleme dönüştürülebilir bir ifade bulundu'],
+    [/A newer workspace source overlaps canonical task state and may require re-sync/gi,'Daha yeni bir çalışma alanı kaynağı mevcut görev durumuyla örtüşüyor; yeniden eşleştirme gerekebilir'],
     [/Conflicting status values found for/gi,'Şu kayıtlar için çelişen durum bilgileri bulundu:'],
     [/Multiple descriptions exist for/gi,'Şu kayıtlar için birden fazla açıklama bulundu:'],
     [/Actionable language found/gi,'Eyleme dönüştürülebilir bir ifade bulundu'],
