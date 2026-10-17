@@ -6,8 +6,11 @@
 <title>AIPP</title>
 <style>
 :root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;--card:#111821;--line:#26313d;--muted:#9aa6b2;--text:#f5f7fa;--ok:#3ddc97;--warn:#e6ad45;--danger:#ff6b6b}
-*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#080c11,#0c1219);color:var(--text)}
-main{width:min(720px,100%);margin:auto;padding:20px 16px calc(44px + env(safe-area-inset-bottom))}
+*{box-sizing:border-box}body{display:grid;grid-template-columns:248px minmax(0,1fr);margin:0;min-height:100vh;background:linear-gradient(180deg,#080c11,#0c1219);color:var(--text)}
+.sidebar{position:sticky;top:0;display:flex;flex-direction:column;gap:0;height:100vh;padding:26px 18px 18px;background:#0c121a;border-right:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;margin:0 12px 42px}.brand-mark{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;background:#3ddc97;color:#08110d;font-weight:900;font-size:18px}.brand-name{font-size:22px;font-weight:900;letter-spacing:-.04em}.brand-sub{display:block;margin-top:4px;color:var(--muted);font-size:9px;letter-spacing:.06em;white-space:nowrap}
+.side-label{margin:0 12px 12px;color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.12em}.side-link{display:flex;align-items:center;gap:10px;min-height:44px;margin-bottom:4px;padding:0 12px;border:1px solid transparent;border-radius:11px;color:var(--muted);font-size:13px;font-weight:650;text-decoration:none}.side-link:hover{background:#141e29;color:var(--text)}.side-link.active{background:#102b20;border-color:#214b38;color:var(--text)}.side-link.active .nav-symbol{color:var(--ok)}.nav-symbol{width:18px;text-align:center;font-size:16px}.side-spacer{flex:1;min-height:24px}.safety-card{padding:14px 12px;border:1px solid var(--line);border-radius:14px;background:#111821}.safety-title{font-size:12px;font-weight:800}.safety-copy{margin-top:7px;color:var(--muted);font-size:11px;line-height:1.5}
+main{width:min(1122px,100%);margin:0 auto;padding:28px 32px calc(44px + env(safe-area-inset-bottom))}
 .top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:20px}.title h1{margin:0;font-size:30px;letter-spacing:-.03em}.subtitle{color:var(--muted);margin-top:4px;font-size:14px}.pill{padding:7px 10px;border:1px solid var(--line);border-radius:999px;font-size:11px;color:var(--muted);white-space:nowrap}
 .card{background:rgba(17,24,33,.96);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:14px;box-shadow:0 10px 32px rgba(0,0,0,.15)}.hidden{display:none!important}
 .eyebrow{font-size:11px;letter-spacing:.1em;color:var(--muted);margin-bottom:8px;font-weight:700}.state{font-size:26px;font-weight:800;letter-spacing:-.02em}.desc{line-height:1.55;color:#dce3ea;margin-top:8px}
@@ -18,11 +21,22 @@ main{width:min(720px,100%);margin:auto;padding:20px 16px calc(44px + env(safe-ar
 .success{border-color:#245a43}.success .state{color:var(--ok)}.error{border-color:#5b3030}.error .state{color:var(--danger)}
 details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px;padding:4px 0}code{display:block;white-space:pre-wrap;word-break:break-word;color:#b8c3ce;line-height:1.45;font-size:12px;margin-top:8px}
 input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;background:#0d141b;color:var(--text);margin-top:10px}.small{font-size:12px;color:var(--muted);line-height:1.45}
-@media(max-width:560px){main{padding-top:16px}.top{align-items:center}.pill{font-size:10px}.hero{padding:22px 18px}.state,.hero .state{font-size:24px}.proposal-title{font-size:19px}.actions{flex-direction:column}button,.choice{width:100%}}
+@media(max-width:760px){body{display:block}.sidebar{display:none}main{width:100%;padding:16px 14px calc(36px + env(safe-area-inset-bottom))}}\n@media(max-width:560px){main{padding-top:16px}.top{align-items:center}.pill{font-size:10px}.hero{padding:22px 18px}.state,.hero .state{font-size:24px}.proposal-title{font-size:19px}.actions{flex-direction:column}button,.choice{width:100%}}
 </style>
 </head>
-<body><main>
-<header class="top">
+<body>
+<aside class="sidebar" aria-label="Ana gezinme">
+  <div class="brand"><span class="brand-mark">A</span><div><div class="brand-name">AIPP</div><small class="brand-sub">SEN KARAR VER. AIPP GERİSİNİ YÖNETİR.</small></div></div>
+  <div class="side-label">ÇALIŞMA ALANI</div>
+  <a class="side-link active" href="#overview"><span class="nav-symbol">◉</span>Genel Bakış</a>
+  <a class="side-link" href="#decisionCard"><span class="nav-symbol">▤</span>Görevler ve öneriler</a>
+  <a class="side-link" href="#workspaceMapCard"><span class="nav-symbol">◫</span>Kaynak belgeler</a>
+  <a class="side-link" href="#activityCard"><span class="nav-symbol">↻</span>İşlem geçmişi</a>
+  <div class="side-spacer"></div>
+  <div class="safety-card"><div class="safety-title"><span style="color:var(--ok)">✓</span> İnsan denetimi açık</div><div class="safety-copy">Sen onaylamadan hiçbir değişiklik uygulanmaz.</div></div>
+</aside>
+<main>
+<header class="top" id="overview">
 <div class="title"><h1>AIPP</h1><div class="subtitle">Sen karar ver. AIPP gerisini yönet.</div></div>
 <div class="pill" id="runtime">BAĞLANIYOR</div>
 </header>
