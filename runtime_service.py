@@ -328,11 +328,36 @@ def run():
             folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
             if not folder_id:
                 raise RuntimeError("HALT: GDRIVE_FOLDER_ID is empty")
-            current = persisted if isinstance(persisted, dict) else None
+            # The panel's status endpoint reads the canonical Drive snapshot,
+            # while this process also keeps a local /tmp cache. Always prefer
+            # Drive here so an approval cannot be checked against stale local state.
+            drive_current = read_session_state(token, folder_id)
+            if isinstance(drive_current, dict) and isinstance(drive_current.get("result"), dict):
+                drive_current = drive_current["result"]
+            current = drive_current if isinstance(drive_current, dict) and drive_current.get("task_lifecycle") else (
+                persisted if isinstance(persisted, dict) else None
+            )
+            if current:
+                _save_session_state({"result": current, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
             if not current or not current.get("task_lifecycle"):
                 code0, current, _, err0 = _run_aipp("REQUEST_APPROVAL", task, max_attempts, include_ai=False)
                 if code0 != 0 or not current:
                     raise RuntimeError(err0 or "HALT: approval request could not be validated")
+            # Make duplicate approval submissions safe: if the same task has
+            # already moved from FUTURE to NOW, preserve that approved state and
+            # let the operator continue with EXECUTE_APPROVED instead of failing.
+            now_task = current.get("task_lifecycle", {}).get("NOW")
+            if isinstance(now_task, dict) and now_task.get("id") == task and str(now_task.get("status", "")).upper() in {"APPROVED", "NOW"}:
+                return jsonify({
+                    "ok": True,
+                    "command": command,
+                    "task": task,
+                    "result": current,
+                    "stdout": json.dumps(current, ensure_ascii=False),
+                    "stderr": "",
+                    "already_approved": True,
+                    "oauth_client_fingerprint": _oauth_client_fingerprint(),
+                }), 200
             future = current.get("task_lifecycle", {}).get("FUTURE", [])
             approved_task = next((item for item in future if item.get("id") == task), None)
             if not approved_task:
