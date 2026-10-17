@@ -361,7 +361,45 @@ def run():
             future = current.get("task_lifecycle", {}).get("FUTURE", [])
             approved_task = next((item for item in future if item.get("id") == task), None)
             if not approved_task:
-                raise RuntimeError("HALT: approval target is not a current FUTURE proposal")
+                # A browser can submit a proposal ID from an older snapshot even
+                # when Drive already contains a valid lifecycle state. Refresh
+                # workspace intelligence once before rejecting the stale ID.
+                code0, refreshed, _, err0 = _run_aipp(
+                    "BAŞLA", None, max_attempts, include_ai=True,
+                    reuse_persisted_state=False,
+                )
+                if code0 != 0 or not refreshed:
+                    raise RuntimeError(err0 or "HALT: workspace refresh failed before approval")
+                refreshed_lifecycle = refreshed.get("task_lifecycle", {})
+                refreshed_future = refreshed_lifecycle.get("FUTURE", [])
+                _save_session_state({
+                    "result": refreshed,
+                    "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                })
+                write_session_state(token, folder_id, refreshed)
+                current = refreshed
+                approved_task = next(
+                    (item for item in refreshed_future if isinstance(item, dict) and item.get("id") == task),
+                    None,
+                )
+                if not approved_task:
+                    # Never transfer a human approval to a different proposal.
+                    # Return the refreshed state so the panel can display the
+                    # current proposal and let the human make a new decision.
+                    return jsonify({
+                        "ok": False,
+                        "command": command,
+                        "task": task,
+                        "error": (
+                            f"Bu öneri artık güncel değil. AIPP çalışma alanını yeniledi; "
+                            f"güncel öneri: {refreshed_future[0].get('id') if refreshed_future else 'yok'}. "
+                            "Yeni öneriyi inceleyip tekrar onaylayabilirsin."
+                        ),
+                        "result": refreshed,
+                        "refreshed": True,
+                        "oauth_client_fingerprint": _oauth_client_fingerprint(),
+                    }), 409
+                future = refreshed_future
             from datetime import datetime, timezone
             if os.environ.get("AIPP_AUTHORITY_PUBKEY", "").strip():
                 # Signed-approval mode: the runtime must NOT write approvals.
