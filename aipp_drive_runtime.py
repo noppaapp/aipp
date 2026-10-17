@@ -25,7 +25,12 @@ GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 PDF_MIME = "application/pdf"
 ZIP_MIME = "application/zip"
-TEXT_MIME_TYPES = {"text/plain", "text/markdown", "text/x-markdown", "text/csv", "application/json", "application/xml", "application/x-yaml", "text/yaml"}
+TEXT_MIME_TYPES = {
+    "text/plain", "text/markdown", "text/x-markdown", "text/csv",
+    "text/x-python", "text/x-script.python", "application/x-python-code",
+    "text/javascript", "application/javascript", "text/typescript",
+    "application/json", "application/xml", "application/x-yaml", "text/yaml",
+}
 ZIP_TEXT_EXTENSIONS = {".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".xml", ".py", ".js", ".ts", ".toml"}
 TASK_ID_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 
