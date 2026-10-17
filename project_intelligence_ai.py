@@ -138,7 +138,7 @@ def _validate(result, documents):
 
 
 def _telemetry(**fields):
-    safe = " ".join(f"{key}={str(value).replace(chr(10), " ").replace(chr(13), " ")}" for key, value in fields.items())
+    safe = " ".join("{}={}".format(key, str(value).replace(chr(10), " ").replace(chr(13), " ")) for key, value in fields.items())
     print(f"AIPP_AI_SEMANTIC {safe}", flush=True)
 
 
