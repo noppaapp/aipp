@@ -291,10 +291,6 @@ def run():
                     "IN_PROGRESS",
                     "AWAITING_AUTHORITY",
                     "APPROVED",
-                    "COMPLETED",
-                    "VERIFIED",
-                    "DONE",
-                    "SUCCESS",
                 }
             )
             if active_session:
