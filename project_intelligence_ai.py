@@ -12,6 +12,7 @@ from ai.model_router import DEFAULT_MODELS
 
 SYSTEM = """You are AIPP Project Intelligence.
 Analyze ONLY the supplied project material.
+Write all user-facing narrative text in Turkish (Türkçe), including finding claims and proposal target descriptions, reasons, and next actions. Preserve exact filenames, task IDs, identifiers, and evidence quotes unchanged; do not translate quoted source evidence. Keep JSON keys and action enum values in English exactly as specified.
 Return JSON with exactly:
 {"findings":[{"type":string,"claim":string,"evidence":[{"file_name":string,"quote":string}]}],
  "proposals":[{"action":"REVIEW|RECONCILE|ADD","target":string,"reason":string,"next_action":string,
