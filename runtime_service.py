@@ -111,13 +111,76 @@ def _drive_context(include_ai=True):
     candidates, documents, drive_scan = discover_task_candidates(token, folder_id, include_documents=True)
     intelligence = analyze_documents(documents)
     intelligence["drive_scan"] = drive_scan
+    intelligence["project_scopes"] = {
+        "AIPP": {"configured": True, "documents_scanned": len(documents), "status": "SCANNED"}
+    }
+
+    # Analyze Noppa separately: its project state must not be confused with
+    # AIPP's canonical boot, authority log, or task lifecycle.
+    noppa_folder_id = os.environ.get("NOPPA_GDRIVE_FOLDER_ID", "").strip()
+    if noppa_folder_id:
+        try:
+            _, noppa_documents, noppa_scan = discover_task_candidates(
+                token, noppa_folder_id, include_documents=True
+            )
+            noppa_intelligence = analyze_documents(noppa_documents)
+            for finding in noppa_intelligence.get("findings", []):
+                finding["project"] = "NOPPA"
+                for evidence in finding.get("evidence", []):
+                    evidence["project"] = "NOPPA"
+            for proposal in noppa_intelligence.get("proposals", []):
+                proposal["project"] = "NOPPA"
+                proposal["target"] = f"[NOPPA] {proposal.get('target', 'Proje incelemesi')}"
+                for evidence in proposal.get("evidence", []):
+                    evidence["project"] = "NOPPA"
+            intelligence["findings"].extend(noppa_intelligence.get("findings", []))
+            intelligence["proposals"].extend(noppa_intelligence.get("proposals", []))
+            intelligence["project_scopes"]["NOPPA"] = {
+                "configured": True, "documents_scanned": len(noppa_documents),
+                "status": "SCANNED", "drive_scan": noppa_scan,
+                "findings": len(noppa_intelligence.get("findings", [])),
+                "proposals": len(noppa_intelligence.get("proposals", [])),
+            }
+            if include_ai:
+                noppa_semantic = analyze_with_ai(noppa_documents)
+                intelligence.setdefault("project_semantic", {})["NOPPA"] = noppa_semantic
+                if noppa_semantic.get("available"):
+                    for finding in noppa_semantic.get("findings", []):
+                        finding["project"] = "NOPPA"
+                        for evidence in finding.get("evidence", []):
+                            evidence["project"] = "NOPPA"
+                    for proposal in noppa_semantic.get("proposals", []):
+                        proposal["project"] = "NOPPA"
+                        proposal["target"] = f"[NOPPA] {proposal.get('target', 'Proje incelemesi')}"
+                        for evidence in proposal.get("evidence", []):
+                            evidence["project"] = "NOPPA"
+                    intelligence["findings"].extend(noppa_semantic.get("findings", []))
+                    intelligence["proposals"].extend(noppa_semantic.get("proposals", []))
+                    intelligence["project_scopes"]["NOPPA"]["ai_status"] = "AVAILABLE"
+                else:
+                    intelligence["project_scopes"]["NOPPA"]["ai_status"] = "FALLBACK"
+            else:
+                intelligence.setdefault("project_semantic", {})["NOPPA"] = {
+                    "enabled": False, "available": False, "reason": "status endpoint does not run AI"
+                }
+        except Exception as exc:
+            print(f"NOPPA_DRIVE_DISCOVERY_ERROR type={type(exc).__name__} message={str(exc)[:240]}", flush=True)
+            intelligence["project_scopes"]["NOPPA"] = {
+                "configured": True, "status": "ACCESS_ERROR", "error": str(exc)[:240]
+            }
+    else:
+        intelligence["project_scopes"]["NOPPA"] = {
+            "configured": False, "status": "NOT_CONFIGURED",
+            "message": "Set NOPPA_GDRIVE_FOLDER_ID to the Noppa Google Drive folder ID."
+        }
+
     if include_ai:
         semantic = analyze_with_ai(documents)
         intelligence["semantic"] = semantic
         if semantic.get("available"):
             intelligence["proposals"].extend(semantic.get("proposals", []))
             intelligence["findings"].extend(semantic.get("findings", []))
-            intelligence["proposals"].sort(key=lambda p: (str(p.get("finding_type", "")), str(p.get("target", "")), str(p.get("action", ""))))
+        intelligence["proposals"].sort(key=lambda p: (str(p.get("finding_type", "")), str(p.get("target", "")), str(p.get("action", ""))))
     else:
         intelligence["semantic"] = {"enabled": False, "available": False, "reason": "status endpoint does not run AI"}
     return boot_text, authority_text, candidates, intelligence
