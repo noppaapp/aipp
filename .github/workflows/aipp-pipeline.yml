@@ -61,6 +61,13 @@ jobs:
       - name: Run AIPP tests
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Keep the test suite hermetic: canonical Drive state is injected into
+          # later runtime steps, but must not override each test's temp workspace.
+          AIPP_PROJECT_BOOT_B64: ""
+          AIPP_AUTHORITY_LOG_B64: ""
+          AIPP_DISCOVERED_TASKS_B64: ""
+          AIPP_PROJECT_INTELLIGENCE_B64: ""
+          AIPP_SESSION_STATE_B64: ""
         run: python -m pytest -q
 
       - name: Run E2E session continuation proof
