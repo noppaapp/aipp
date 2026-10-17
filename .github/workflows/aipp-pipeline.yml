@@ -71,6 +71,13 @@ jobs:
         run: python -m pytest -q
 
       - name: Run E2E session continuation proof
+        env:
+          # E2E fixtures must use their temporary canonical files, not live Drive state.
+          AIPP_PROJECT_BOOT_B64: ""
+          AIPP_AUTHORITY_LOG_B64: ""
+          AIPP_DISCOVERED_TASKS_B64: ""
+          AIPP_PROJECT_INTELLIGENCE_B64: ""
+          AIPP_SESSION_STATE_B64: ""
         run: python -m pytest -q -s tests/e2e/test_session_continuation.py
 
       - name: Bridge discovered Drive tasks into runtime
