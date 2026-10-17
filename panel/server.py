@@ -125,7 +125,7 @@ def command():
         body = request.get_json(silent=True) or {}
         command_name = str(body.get('command') or 'BAŞLA').strip().upper()
         task = str(body.get('task') or '').strip()
-        payload = {'command': command_name, 'task': task or None, 'max_attempts': int(body.get('max_attempts') or 3)}
+        payload = {'command': command_name, 'task': task or None, 'max_attempts': int(body.get('max_attempts') or 3), 'force_refresh': bool(body.get('force_refresh', False))}
         return jsonify(runtime_request('/api/run', 'POST', payload))
     except RuntimeRequestError as exc:
         return jsonify(exc.data), exc.status_code
