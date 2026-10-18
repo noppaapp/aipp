@@ -60,10 +60,10 @@ def test_completion_requires_matching_completed_decision():
     current["proposal_id"] = pid
     current["status"] = "VERIFIED"
     log = (
-        "# AUTHORITY_LOG\\n\\n"
-        "| Proposal ID | Task ID | Decision | Timestamp | Note |\\n"
-        "| :--- | :--- | :--- | :--- | :--- |\\n"
-        f"| {pid} | TASK-01 | COMPLETED | 2026-10-18T00:00:00Z | human |\\n"
+        "# AUTHORITY_LOG\n\n"
+        "| Proposal ID | Task ID | Decision | Timestamp | Note |\n"
+        "| :--- | :--- | :--- | :--- | :--- |\n"
+        f"| {pid} | TASK-01 | COMPLETED | 2026-10-18T00:00:00Z | human |\n"
     )
     assert is_completion_approved(log, current)
 
