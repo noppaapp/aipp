@@ -378,6 +378,20 @@ def execute_task(state, workspace):
         task.get("binding_digest") is not None or task.get("status") == "APPROVED"
     ):
         raise RuntimeError("HALT: Task payload changed after approval (binding digest mismatch)")
+
+    # A review/recommendation is not an executable external action. Never create
+    # a local artifact and label the task EXECUTED unless a supported target
+    # mutation actually ran. This prevents a false success for workspace reviews
+    # and arbitrary TASK rows that have no implementation.
+    supported_actions = {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}
+    external_action = task.get("external_action")
+    if external_action not in supported_actions:
+        raise RuntimeError(
+            "HALT: Bu görev için desteklenen gerçek bir uygulama işlemi tanımlı değil. "
+            "İnceleme ve öneriler EXECUTED olarak işaretlenemez; kaynak ve işlem türü "
+            "doğrulanmadan hiçbir değişiklik yapılmadı."
+        )
+
     external_result = None
     try:
         if task.get("external_action") == "GITHUB_PROOF_BRANCH":
