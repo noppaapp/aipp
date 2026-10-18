@@ -72,7 +72,8 @@ def test_full_cycle_against_fake_drive(service):
     assert data["result"]["task_lifecycle"]["NOW"]["status"] == "VERIFIED"
     assert data["result"]["task_lifecycle"]["COMPLETED"] == []
     persisted = client.get("/api/status").get_json()
-    assert persisted["ok"] and persisted["task_lifecycle"]["NOW"] is None
+    assert persisted["ok"] and persisted["task_lifecycle"]["NOW"]["status"] == "VERIFIED"
+    assert persisted["status"] == "AWAITING_COMPLETION_AUTHORITY"
     assert drive.text("AIPP_SESSION_STATE.json")
 
 def test_signed_approval_requires_external_human_row(service, monkeypatch):
