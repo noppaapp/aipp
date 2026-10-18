@@ -1,4 +1,4 @@
-from aipp_authority import is_approved, proposal_id
+from aipp_authority import is_approved, is_completion_approved, proposal_id
 
 
 def task():
@@ -51,3 +51,26 @@ def test_old_approval_does_not_authorize_changed_proposal(tmp_path):
     log = tmp_path / "AUTHORITY_LOG.md"
     log.write_text(authority_text(pid), encoding="utf-8")
     assert not is_approved(log, changed)
+
+
+
+def test_completion_requires_matching_completed_decision():
+    current = task()
+    pid = proposal_id(current)
+    current["proposal_id"] = pid
+    current["status"] = "VERIFIED"
+    log = (
+        "# AUTHORITY_LOG\\n\\n"
+        "| Proposal ID | Task ID | Decision | Timestamp | Note |\\n"
+        "| :--- | :--- | :--- | :--- | :--- |\\n"
+        f"| {pid} | TASK-01 | COMPLETED | 2026-10-18T00:00:00Z | human |\\n"
+    )
+    assert is_completion_approved(log, current)
+
+
+def test_approval_does_not_authorize_completion():
+    current = task()
+    pid = proposal_id(current)
+    current["proposal_id"] = pid
+    current["status"] = "VERIFIED"
+    assert not is_completion_approved(authority_text(pid), current)
