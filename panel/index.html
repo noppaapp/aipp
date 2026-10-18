@@ -30,7 +30,7 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
   <div class="brand"><span class="brand-mark">n</span><div><div class="brand-name">noppa <span style="color:var(--brand)">/</span> AIPP</div><small class="brand-sub">SEN KARAR VER. AIPP GERİSİNİ YÖNETİR.</small></div></div>
   <div class="side-label">ÇALIŞMA ALANI</div>
   <a class="side-link active" href="#overview"><span class="nav-symbol">◉</span>Genel Bakış</a>
-  <a class="side-link" href="#decisionCard"><span class="nav-symbol">▤</span>Görevler ve öneriler</a>
+  <a class="side-link" href="#decisionCard" onclick="openTasks(event)"><span class="nav-symbol">▤</span>Görevler ve öneriler</a>
   <a class="side-link" href="#workspaceMapCard"><span class="nav-symbol">◫</span>Kaynak belgeler</a>
   <a class="side-link" href="#activityCard"><span class="nav-symbol">↻</span>İşlem geçmişi</a>
   <div class="side-spacer"></div>
@@ -133,6 +133,24 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
 </section>
 
 <script>
+function openTasks(event){
+  if(event)event.preventDefault();
+  const candidates=['reviewCard','waitingCard','executeCard','decisionCard'];
+  let target=candidates.map(id=>document.getElementById(id)).find(el=>el&&!el.classList.contains('hidden'));
+  if(!target){
+    setVisible('decisionCard',true);
+    document.getElementById('proposalTitle').textContent='Henüz görev veya öneri yüklenmedi';
+    document.getElementById('proposalDesc').textContent='AIPP’nin güncel görev listesini görmek için Genel Bakış bölümündeki BAŞLAT düğmesini kullan. Bu ekran kendiliğinden bir işlem başlatmaz.';
+    document.getElementById('meaning').textContent='Henüz incelenebilir bir öneri bulunmuyor.';
+    const review=document.getElementById('reviewBtn');
+    if(review)review.classList.add('hidden');
+    target=document.getElementById('decisionCard');
+  }else{
+    const review=document.getElementById('reviewBtn');
+    if(review)review.classList.toggle('hidden',!currentProposal);
+  }
+  target.scrollIntoView({behavior:'smooth',block:'start'});
+}
 function token(){return localStorage.getItem('aipp_panel_token')||''}
 function saveToken(){const v=document.getElementById('panelToken').value.trim();if(v)localStorage.setItem('aipp_panel_token',v);updateAuth();refresh()}
 async function updateAuth(){
@@ -219,7 +237,30 @@ async function requestApproval(){
     if(b){b.disabled=false;b.textContent='KARARIMI SUN'}
   }
 }
-async function approveHuman(){if(!suggestedTask)return;const b=document.getElementById('approveBtn');let refreshed=false;b.disabled=true;b.textContent='KAYDEDİLİYOR...';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'APPROVE',task:suggestedTask})});const data=await r.json();if(!r.ok){if(data.refreshed&&data.result?.task_lifecycle){saveRunState(data);render(data);refreshed=true}throw new Error(data.error||'Onay kaydedilemedi.')}saveRunState(data);render(data)}catch(e){if(!refreshed)hideFlow();setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message}finally{b.disabled=false;b.textContent='ONAYLA'}}
+async function approveHuman(){
+  if(!suggestedTask)return;
+  // The same action is available from both the review card and the waiting card.
+  // Resolve whichever button is currently rendered; never fail before the request.
+  const b=document.getElementById('approveBtn')||document.getElementById('requestApprovalBtn');
+  const originalLabel=b?.textContent||'ONAYLA';
+  let refreshed=false;
+  if(b){b.disabled=true;b.textContent='KAYDEDİLİYOR...'}
+  try{
+    const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'APPROVE',task:suggestedTask})});
+    const data=await r.json();
+    if(!r.ok){
+      if(data.refreshed&&data.result?.task_lifecycle){saveRunState(data);render(data);refreshed=true}
+      throw new Error(data.error||'Onay kaydedilemedi.');
+    }
+    saveRunState(data);render(data);
+  }catch(e){
+    if(!refreshed)hideFlow();
+    setVisible('errorCard',true);
+    document.getElementById('errorText').textContent=e.message||'Onay kaydedilemedi.';
+  }finally{
+    if(b){b.disabled=false;b.textContent=originalLabel}
+  }
+}
 
 async function executeApproved(){if(!suggestedTask||!currentProposal){setVisible('errorCard',true);document.getElementById('errorText').textContent='Uygulanacak görev ve açık işlem açıklaması doğrulanamadı. Hiçbir işlem başlatılmadı.';return}const b=document.getElementById('executeBtn');b.disabled=true;b.textContent='UYGULANIYOR...';setVisible('executeCard',false);setVisible('workingCard',true);document.getElementById('status').textContent='UYGULANIYOR';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'EXECUTE_APPROVED',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Uygulama tamamlanamadı.');saveRunState(data);const v=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'VERIFY',task:suggestedTask})});const verified=await v.json();if(!v.ok)throw new Error(verified.error||'Doğrulama tamamlanamadı.');saveRunState(verified);render(verified)}catch(e){hideFlow();setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message||'İşlem tamamlanamadı.'}finally{b.disabled=false;b.textContent='UYGULA'}}
 let refreshBusy=false;
