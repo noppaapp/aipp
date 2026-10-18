@@ -33,6 +33,23 @@ def _load_session_state():
             return json.loads(SESSION_STATE_PATH.read_text(encoding="utf-8"))
     except Exception:
         pass
+
+    # Render instances can restart or lose their ephemeral /tmp state.
+    # Restore the canonical session snapshot from Drive before falling back
+    # to a full workspace scan during an approved execution.
+    try:
+        folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+        if not folder_id:
+            return None
+        token = get_access_token()
+        persisted = read_session_state(token, folder_id)
+        if isinstance(persisted, dict):
+            restored = persisted if isinstance(persisted.get("result"), dict) else {"result": persisted}
+            SESSION_STATE_PATH.write_text(json.dumps(restored, ensure_ascii=False), encoding="utf-8")
+            print("AIPP_SESSION_STATE_RESTORED source=Google Drive", flush=True)
+            return restored
+    except Exception as exc:
+        print(f"AIPP_SESSION_STATE_RESTORE_ERROR type={type(exc).__name__}", flush=True)
     return None
 
 def _save_session_state(payload):
