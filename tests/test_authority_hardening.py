@@ -108,6 +108,33 @@ def test_completion_gate_requires_completed_decision(monkeypatch):
         aipp_runner.complete_task(state, "T-1", row(pid, "T-1", "APPROVED"))
 
 
+def test_review_only_proposal_halts_without_creating_artifact(tmp_path):
+    task = {
+        "id": "REVIEW-1", "title": "Review workspace", "status": "NOW",
+        "source": {"finding_type": "workspace_review_required"},
+    }
+    state = aipp_runner.default_state()
+    state["task_lifecycle"]["NOW"] = task
+    with pytest.raises(RuntimeError, match="İnceleme ve öneri görevleri yürütülemez"):
+        aipp_runner.execute_task(state, tmp_path)
+    assert not (tmp_path / aipp_runner.ARTIFACT_DIR / "REVIEW-1-execution.json").exists()
+
+
+def test_local_only_task_is_labelled_and_verifiable(tmp_path):
+    task = {
+        "id": "LOCAL-1", "title": "Local artifact", "status": "NOW",
+        "external_action": "LOCAL_ONLY",
+    }
+    state = aipp_runner.default_state()
+    state["task_lifecycle"]["NOW"] = task
+    state = aipp_runner.execute_task(state, tmp_path)
+    artifact = aipp_runner.load_json(tmp_path / state["task_lifecycle"]["NOW"]["artifact"])
+    assert artifact["action_mode"] == "LOCAL_ONLY"
+    assert artifact["result"] == "LOCAL_ARTIFACT_CREATED"
+    state = aipp_runner.verify_task(state, tmp_path)
+    assert state["status"] == "AWAITING_COMPLETION_AUTHORITY"
+
+
 def test_completion_approval_completes_verified_task(monkeypatch):
     monkeypatch.setenv("AIPP_REQUIRE_COMPLETION_GATE", "1")
     task = {"id": "T-2", "title": "complete", "status": "FUTURE", "dependency_reason": "-"}
