@@ -41,7 +41,8 @@ def test_old_proposal_refresh_does_not_approve_a_new_proposal(monkeypatch):
     )
 
     response = runtime_service.app.test_client().post(
-        "/api/run", json={"command": "APPROVE", "task": "STALE"},\n        headers={"X-AIPP-Runtime-Token": "test-runtime-token"}
+        "/api/run", json={"command": "APPROVE", "task": "STALE"},
+        headers={"X-AIPP-Runtime-Token": "test-runtime-token"}
     )
 
     assert response.status_code == 409
