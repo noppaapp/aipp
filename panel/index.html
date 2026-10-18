@@ -232,7 +232,7 @@ function localizeProposalText(value){
 
 // Convert technical findings into plain Turkish, not merely word-for-word translations.
 function explainProposal(p){
-  const raw=[p?.description,p?.reason,p?.proposal_reason,p?.recommendation,p?.source?.finding_type].filter(Boolean).join(' ');
+  const raw=[...new Set([p?.description,p?.reason,p?.proposal_reason,p?.recommendation,p?.source?.finding_type].filter(Boolean))].join(' ');
   const text=localizeProposalText(raw);
   if(/Actionable language found|Eyleme dönüştürülebilir bir ifade bulundu/i.test(raw)){
     return 'Belgelerde yapılması gereken bir işi anlatan bir ifade bulundu. Ancak bu iş henüz AIPP’nin görev listesine bağlanmamış. Bu, işlemin yapılacağı veya onaylandığı anlamına gelmez. Önce kaynak belgeyi açıp ne istendiğini kontrol et.';
