@@ -67,7 +67,10 @@ def test_full_cycle_against_fake_drive(service):
     assert data["result"]["status"] == "EXECUTED"
     code, data = call(client, "VERIFY", "TASK-10")
     assert code == 200, data
-    assert [t["id"] for t in data["result"]["task_lifecycle"]["COMPLETED"]] == ["TASK-10"]
+    assert data["result"]["status"] == "AWAITING_COMPLETION_AUTHORITY"
+    assert data["result"]["task_lifecycle"]["NOW"]["id"] == "TASK-10"
+    assert data["result"]["task_lifecycle"]["NOW"]["status"] == "VERIFIED"
+    assert data["result"]["task_lifecycle"]["COMPLETED"] == []
     persisted = client.get("/api/status").get_json()
     assert persisted["ok"] and persisted["task_lifecycle"]["NOW"] is None
     assert drive.text("AIPP_SESSION_STATE.json")
