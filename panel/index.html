@@ -75,7 +75,7 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
 <div class="callout" id="reviewRecommendation">AIPP'nin önerisi burada açıklanır.</div><div class="eyebrow" style="margin-top:18px">ONAYDAN SONRA NE YAPILACAK?</div><div class="callout" id="reviewNextAction">AIPP'nin gerçekleştireceği aksiyon burada açıklanır.</div>
 <div class="actions">
 <button class="primary choice" id="requestApprovalBtn" onclick="approveHuman()">ONAYLA</button>
-
+<button class="primary choice hidden" id="reviewApprovedActionBtn" onclick="confirmApprovedActionReviewed()">İŞLEMİ ANLADIM, UYGULAMAYA GEÇ</button>
 </div>
 <div class="small" style="margin-top:12px">Onay vermeden gerçek uygulama başlatılmaz.</div>
 <details id="evidenceDetails" class="hidden"><summary>Kaynak ve teknik kanıt</summary><div id="evidence"></div></details>
@@ -205,7 +205,34 @@ function localizeProposalText(value){
   return s;
 }
 
-function showReview(){if(!currentProposal)return;setVisible('decisionCard',false);setVisible('waitingCard',false);setVisible('reviewCard',true);document.getElementById('reviewFinding').textContent=localizeProposalText(currentProposal.description||currentProposal.reason||'AIPP çalışma alanında bu konu bulundu.');document.getElementById('reviewRecommendation').textContent=localizeProposalText(currentProposal.recommendation||currentProposal.proposal_reason||currentProposal.reason||'AIPP bu konunun ele alınmasını öneriyor.');document.getElementById('reviewNextAction').textContent=localizeProposalText(currentProposal.next_action||'Onaydan sonra AIPP bu öneriyi uygulanabilir bir aksiyona dönüştürüp doğrulayacak.');renderEvidence(currentProposal)}
+function isApprovedProposal(p){return !!(p&&['APPROVED','NOW'].includes(String(p.status||'').toUpperCase()))}
+function showReview(){
+  if(!currentProposal)return;
+  setVisible('decisionCard',false);setVisible('waitingCard',false);setVisible('reviewCard',true);
+  const approved=isApprovedProposal(currentProposal);
+  document.getElementById('requestApprovalBtn').classList.toggle('hidden',approved);
+  const reviewedBtn=document.getElementById('reviewApprovedActionBtn');
+  const explicitAction=currentProposal.next_action||currentProposal.action||currentProposal.execution_plan;
+  reviewedBtn.classList.toggle('hidden',!approved);
+  reviewedBtn.disabled=approved&&!explicitAction;
+  reviewedBtn.textContent=explicitAction?'İŞLEMİ ANLADIM, UYGULAMAYA GEÇ':'İŞLEM AÇIKLAMASI EKSİK';
+  document.getElementById('reviewFinding').textContent=localizeProposalText(currentProposal.description||currentProposal.reason||'AIPP çalışma alanında bu konu bulundu.');
+  document.getElementById('reviewRecommendation').textContent=localizeProposalText(currentProposal.recommendation||currentProposal.proposal_reason||currentProposal.reason||'Önerinin gerekçesi kayıtta bulunamadı.');
+  document.getElementById('reviewNextAction').textContent=localizeProposalText(explicitAction||(approved?'Kayıtta uygulanacak somut işlem açıklaması bulunamadı. Güvenli şekilde devam edebilmek için bu açıklama gerekli.':'Onaydan sonra yapılacak işlem henüz kesinleşmedi.'));
+  renderEvidence(currentProposal)
+}
+function confirmApprovedActionReviewed(){
+  if(!isApprovedProposal(currentProposal))return;
+  const explicitAction=currentProposal.next_action||currentProposal.action||currentProposal.execution_plan;
+  if(!explicitAction){
+    document.getElementById('reviewNextAction').textContent='İşlem açıklaması eksik. Uygulama güvenlik nedeniyle kapalı tutuluyor.';
+    return;
+  }
+  const executeBtn=document.getElementById('executeBtn');
+  executeBtn.disabled=false;executeBtn.textContent='UYGULA';
+  setVisible('reviewCard',false);setVisible('executeCard',true);
+  document.getElementById('executeCard').scrollIntoView({behavior:'smooth',block:'start'});
+}
 function renderEvidence(p){const ev=p?.source?.evidence||p?.evidence||[];const d=document.getElementById('evidenceDetails');d.classList.toggle('hidden',!ev.length);document.getElementById('evidence').innerHTML=ev.map(x=>'<div class="small" style="margin-top:10px"><b>'+escapeHtml(x.file_name||'Belge')+'</b><br>Kaynak: '+escapeHtml(x.source||'Google Drive')+'<details><summary>Kanıt alıntısı</summary><code>'+escapeHtml(x.quote||'Kanıt alıntısı bulunamadı.')+'</code></details></div>').join('')}
 function render(data){const s=normalizeState(data);lastRunState=data;const l=s.task_lifecycle||{},g=s.authority_gate||{},now=l.NOW,p=getProposal(s)||((l.FUTURE||[])[0]||null),intel=s.project_intelligence||{};currentProposal=p;suggestedTask=p?.id||now?.id||'';document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':'BAĞLI';hideFlow();
 const status=String(s.status||'').toUpperCase(),pending=g.pending_approval,approved=now&&['APPROVED','NOW'].includes(String(now.status).toUpperCase()),future=(Array.isArray(l.FUTURE)?l.FUTURE:[]),completed=future.length===0&&!p&&!pending&&!approved&&((l.COMPLETED||[]).length>0||['COMPLETED','VERIFIED','DONE','SUCCESS'].includes(status));const startHidden=!!(s.ok===false||pending||approved||['RUNNING','EXECUTING','IN_PROGRESS'].includes(status));document.getElementById('startBtn').classList.toggle('hidden',startHidden);
