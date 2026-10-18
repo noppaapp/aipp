@@ -268,7 +268,8 @@ async function approveHuman(){
   if(!suggestedTask)return;
   // The same action is available from both the review card and the waiting card.
   // Resolve whichever button is currently rendered; never fail before the request.
-  const b=document.getElementById('approveBtn')||document.getElementById('requestApprovalBtn');
+  const waitingVisible=!document.getElementById('waitingCard').classList.contains('hidden');
+  const b=waitingVisible?document.getElementById('approveBtn'):document.getElementById('requestApprovalBtn');
   const originalLabel=b?.textContent||'ONAYLA';
   let refreshed=false;
   if(b){b.disabled=true;b.textContent='KAYDEDİLİYOR...'}
