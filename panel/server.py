@@ -17,8 +17,9 @@ def fingerprint(value):
     return hashlib.sha256(value.encode('utf-8')).hexdigest()[:12] if value else 'NONE'
 
 def require_panel_token():
+    # Fail closed: never expose operator APIs when the panel secret is absent.
     if not PANEL_TOKEN:
-        return None
+        return jsonify({'ok': False, 'error': 'Panel authentication is not configured'}), 503
     supplied = request.headers.get('X-AIPP-Panel-Token', '').strip()
     if not supplied:
         auth = request.headers.get('Authorization', '')
