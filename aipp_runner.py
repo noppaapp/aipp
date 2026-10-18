@@ -429,14 +429,15 @@ def verify_task(state, workspace):
     if task.get("binding_digest") is not None and task["binding_digest"] != binding_digest(task):
         raise RuntimeError("HALT: Task payload changed after approval (binding digest mismatch)")
     task["verified_at"] = utc_now()
-    if os.environ.get(COMPLETION_GATE_ENV, "").strip() == "1":
-        task["status"] = "VERIFIED"
-        state["authority_gate"]["pending_completion"] = task["id"]
-        state["authority_gate"]["last_action"] = "VERIFICATION_PASSED_AWAITING_COMPLETION_AUTHORITY"
-        state["status"] = "AWAITING_COMPLETION_AUTHORITY"
-        state["step"] = 3
-        return state
-    return _finalize_completion(state, task)
+    # Completion authority is mandatory under the frozen v1.1.1 protocol.
+    # The legacy environment flag is intentionally not an opt-out: a verified
+    # artifact must remain VERIFIED until a canonical human approval is supplied.
+    task["status"] = "VERIFIED"
+    state.setdefault("authority_gate", {})["pending_completion"] = task["id"]
+    state["authority_gate"]["last_action"] = "VERIFICATION_PASSED_AWAITING_COMPLETION_AUTHORITY"
+    state["status"] = "AWAITING_COMPLETION_AUTHORITY"
+    state["step"] = 3
+    return state
 
 
 def _finalize_completion(state, task):
