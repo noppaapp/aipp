@@ -15,6 +15,7 @@ from aipp_drive_runtime import (
     find_authority_log,
     read_file_text,
     write_authority_approval,
+    write_completion_approval,
     read_session_state,
     write_session_state,
     discover_task_candidates,
@@ -517,14 +518,26 @@ def run():
             reuse = command in {"REQUEST_APPROVAL", "APPROVE", "EXECUTE", "VERIFY", "CONTINUE", "COMPLETE"}
             include_ai = command == "BAŞLA"
             if command == "COMPLETE":
+                if os.environ.get("AIPP_AUTHORITY_PUBKEY", "").strip():
+                    raise RuntimeError(
+                        "HALT: signed-authority mode is enabled. Add a signed COMPLETED decision to AUTHORITY_LOG.md before finalizing."
+                    )
                 token = get_access_token()
                 folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
-                authority_info = find_authority_log(token, folder_id) if folder_id else None
-                if not authority_info:
-                    raise RuntimeError("HALT: AUTHORITY_LOG.md not found in configured Drive folder")
-                authority_override = read_file_text(token, authority_info)
-                if authority_override is None:
-                    raise RuntimeError("HALT: AUTHORITY_LOG.md could not be read from Google Drive")
+                if not folder_id:
+                    raise RuntimeError("HALT: GDRIVE_FOLDER_ID is empty")
+                drive_current = read_session_state(token, folder_id)
+                if isinstance(drive_current, dict) and isinstance(drive_current.get("result"), dict):
+                    drive_current = drive_current["result"]
+                current_task = (drive_current or {}).get("task_lifecycle", {}).get("NOW")
+                if not isinstance(current_task, dict) or current_task.get("id") != task:
+                    raise RuntimeError("HALT: completion target is not the current active task")
+                if str(current_task.get("status", "")).upper() != "VERIFIED":
+                    raise RuntimeError("HALT: only a VERIFIED task can receive completion approval")
+                from datetime import datetime, timezone
+                authority_override = write_completion_approval(
+                    token, folder_id, current_task, datetime.now(timezone.utc).isoformat()
+                )
             code, payload, stdout, stderr = _run_aipp(
                 command, task, max_attempts, include_ai=include_ai,
                 reuse_persisted_state=reuse, authority_text_override=authority_override

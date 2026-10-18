@@ -214,6 +214,31 @@ def write_authority_approval(token, folder_id, task, timestamp):
     return content
 
 
+def write_completion_approval(token, folder_id, task, timestamp):
+    """Record an explicit operator decision to finalize a verified task."""
+    from aipp_authority import parse_authority_log_text
+    pid = task.get("proposal_id")
+    task_id = task.get("id")
+    if not pid or not task_id or str(task.get("status", "")).upper() != "VERIFIED":
+        raise RuntimeError("HALT: completion approval requires a verified task and its original proposal ID")
+    info = find_authority_log(token, folder_id)
+    if info:
+        current = read_file_text(token, info) or ""
+        if any(row.get("proposal_id") == pid and row.get("task_id") == task_id and row.get("decision") == "COMPLETED" for row in parse_authority_log_text(current)):
+            return current
+        content = current.rstrip() + ("\n" if current.strip() else "# AUTHORITY_LOG\n\n| Proposal ID | Task ID | Decision | Timestamp | Note |\n| :--- | :--- | :--- | :--- | :--- |\n")
+        content += f"| {pid} | {task_id} | COMPLETED | {timestamp} | human |\n"
+        endpoint = f"https://www.googleapis.com/upload/drive/v3/files/{info.get('id')}?{urlencode({'uploadType': 'media', 'supportsAllDrives': 'true'})}"
+        _request(endpoint, method="PATCH", data=content.encode("utf-8"), token=token, content_type="text/markdown")
+        return content
+    metadata = json.dumps({"name": AUTHORITY_LOG, "parents": [folder_id], "mimeType": "text/markdown"}).encode("utf-8")
+    created = json.loads(_request(f"{DRIVE_API}/files?{urlencode({'supportsAllDrives': 'true'})}", method="POST", data=metadata, token=token, content_type="application/json"))
+    content = "# AUTHORITY_LOG\n\n| Proposal ID | Task ID | Decision | Timestamp | Note |\n| :--- | :--- | :--- | :--- | :--- |\n" + f"| {pid} | {task_id} | COMPLETED | {timestamp} | human |\n"
+    endpoint = f"https://www.googleapis.com/upload/drive/v3/files/{created['id']}?{urlencode({'uploadType': 'media', 'supportsAllDrives': 'true'})}"
+    _request(endpoint, method="PATCH", data=content.encode("utf-8"), token=token, content_type="text/markdown")
+    return content
+
+
 def _download_binary(token, file_id):
     endpoint = f"{DRIVE_API}/files/{file_id}?{urlencode({'alt': 'media', 'supportsAllDrives': 'true'})}"
     return _request(endpoint, token=token)

@@ -110,6 +110,14 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
 <div class="actions"><button class="secondary" onclick="refresh()">TEKRAR KONTROL ET</button></div>
 </section>
 
+<section class="card hidden" id="completionCard">
+<div class="eyebrow">SON KONTROL</div>
+<div class="state">TAMAMLAMA ONAYI GEREKİYOR</div>
+<div class="desc" id="completionText">AIPP işlemi doğruladı. Oturumu tamamlamak için son kararın gerekiyor.</div>
+<div class="actions"><button class="primary choice" id="completeBtn" onclick="completeHuman()">DOĞRULANDI, TAMAMLAMAYI ONAYLA</button></div>
+<div class="small">Bu düğme yalnızca doğrulanmış görevi tamamlandı olarak kaydeder; yeni bir görev başlatmaz.</div>
+</section>
+
 <section class="card hidden" id="activityCard">
 <div class="eyebrow">AIPP NE YAPTI?</div>
 <div class="metric"><span>Drive dosyası tarandı</span><b id="driveFiles">0</b></div><div class="metric"><span>Okunabilen belge</span><b id="docs">0</b></div><div class="metric"><span>Okunamayan belge</span><b id="unreadable">0</b></div>
@@ -182,7 +190,7 @@ function loadRunState(){try{const v=localStorage.getItem('aipp_last_run_state');
 function escapeHtml(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function getProposal(s){return (s.task_lifecycle?.FUTURE||[])[0]||null}
 function setVisible(id,on){document.getElementById(id).classList.toggle('hidden',!on)}
-function hideFlow(){['decisionCard','reviewCard','waitingCard','executeCard','workingCard','doneCard','errorCard'].forEach(id=>setVisible(id,false))}
+function hideFlow(){['decisionCard','reviewCard','waitingCard','executeCard','workingCard','doneCard','errorCard','completionCard'].forEach(id=>setVisible(id,false))}
 function localizeProposalText(value){
   if(!value)return value;
   let s=String(value);
@@ -276,6 +284,12 @@ function renderEvidence(p){const raw=p?.source?.evidence||p?.evidence||[];const 
 function render(data){const s=normalizeState(data);lastRunState=data;const l=s.task_lifecycle||{},g=s.authority_gate||{},now=l.NOW,p=getProposal(s)||((l.FUTURE||[])[0]||null),intel=s.project_intelligence||{};currentProposal=p;suggestedTask=p?.id||now?.id||'';document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':'BAĞLI';hideFlow();updateWorkspaceMap(s);
 const status=String(s.status||'').toUpperCase(),pending=g.pending_approval,approved=!pending&&now&&String(now.status||'').toUpperCase()==='APPROVED',future=(Array.isArray(l.FUTURE)?l.FUTURE:[]),completed=future.length===0&&!p&&!pending&&!approved&&((l.COMPLETED||[]).length>0||['COMPLETED','VERIFIED','DONE','SUCCESS'].includes(status));const startHidden=!!(s.ok===false||pending||approved||['RUNNING','EXECUTING','IN_PROGRESS'].includes(status));document.getElementById('startBtn').classList.toggle('hidden',startHidden);
 if(s.ok===false){setVisible('errorCard',true);document.getElementById('errorText').textContent=s.error||'AIPP Runtime ile bağlantı kurulamadı.';return}
+if(status==='AWAITING_COMPLETION_AUTHORITY' && now && String(now.status||'').toUpperCase()==='VERIFIED'){
+document.getElementById('status').textContent='TAMAMLAMA ONAYI GEREKİYOR';
+document.getElementById('summary').textContent='İşlem yapıldı ve doğrulandı. Son olarak tamamlandığını onaylaman gerekiyor.';
+document.getElementById('startBtn').classList.add('hidden');
+document.getElementById('completionText').textContent='Doğrulanan görev: '+localizeProposalText(now.title||now.id||'Görev')+'. Son onaydan sonra AIPP bunu tamamlandı olarak kaydedecek.';
+setVisible('completionCard',true);return}
 if(completed&&!pending&&!approved){document.getElementById('status').textContent='TAMAMLANDI';document.getElementById('summary').textContent='İşlem tamamlandı ve doğrulandı.';setVisible('doneCard',true);return}
 if(approved){const a={...(p||{}),...(now||{}),id:now?.id||p?.id||'',title:now?.title||p?.title,name:now?.name||p?.name,description:now?.description||p?.description,reason:now?.reason||p?.reason,recommendation:now?.recommendation||p?.recommendation,next_action:now?.next_action||p?.next_action,proposal_reason:now?.proposal_reason||p?.proposal_reason};currentProposal=a;suggestedTask=a.id||'';document.getElementById('reviewBtn').classList.remove('hidden');document.getElementById('status').textContent='ONAY VERİLDİ';document.getElementById('summary').textContent='Önceden onay kaydedilmiş; ancak hangi işlemin onaylandığı açıkça gösterilmeli.';document.getElementById('proposalTitle').textContent=localizeProposalText(a.title||a.name||a.id||'Onaylanan görevin başlığı bulunamadı');document.getElementById('proposalDesc').textContent=localizeProposalText(a.description||a.reason||'Bu görev için açıklama kaydı panel durumunda bulunamadı. Bu nedenle ne yapılacağı henüz doğrulanamıyor.');document.getElementById('meaning').textContent=explainProposal(a);setVisible('decisionCard',true);const details=[['Görev',a.title||a.name||a.id],['Açıklama',a.description||a.reason],['Önerilen işlem',a.next_action||a.recommendation||a.proposal_reason]].filter(x=>x[1]).map(x=>x[0]+': '+localizeProposalText(x[1])).join('\\n\\n');document.getElementById('approvedActionDetails').textContent=details||'Bu kayıtta hangi işlemin onaylandığını açıklayan yeterli bilgi bulunamadı. Güvenli şekilde devam etmek için işlem ayrıntıları gerekli.';const eb=document.getElementById('executeBtn');eb.disabled=true;eb.textContent='ÖNCE İŞLEMİ AÇIKLA';setVisible('executeCard',true);return}
 if(pending){document.getElementById('status').textContent='KARARIN BEKLENİYOR';document.getElementById('summary').textContent='AIPP ilerlemek için senden açık onay bekliyor.';setVisible('waitingCard',true);document.getElementById('waitingText').textContent=p?'AIPP şu konuyu senin kararına sundu: '+localizeProposalText(p.title||'öneri'):'AIPP bir sonraki adım için senden onay bekliyor.';return}
@@ -333,9 +347,27 @@ async function approveHuman(){
 }
 
 async function executeApproved(){if(!suggestedTask||!currentProposal){setVisible('errorCard',true);document.getElementById('errorText').textContent='Uygulanacak görev ve açık işlem açıklaması doğrulanamadı. Hiçbir işlem başlatılmadı.';return}const b=document.getElementById('executeBtn');b.disabled=true;b.textContent='UYGULANIYOR...';setVisible('executeCard',false);setVisible('workingCard',true);document.getElementById('status').textContent='UYGULANIYOR';try{const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'EXECUTE_APPROVED',task:suggestedTask})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Uygulama tamamlanamadı.');saveRunState(data);const v=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'VERIFY',task:suggestedTask})});const verified=await v.json();if(!v.ok)throw new Error(verified.error||'Doğrulama tamamlanamadı.');saveRunState(verified);render(verified)}catch(e){hideFlow();setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message||'İşlem tamamlanamadı.'}finally{b.disabled=false;b.textContent='UYGULA'}}
+async function completeHuman(){
+  const s=normalizeState(lastRunState);
+  const task=s.task_lifecycle?.NOW;
+  if(!task||String(task.status||'').toUpperCase()!=='VERIFIED'){
+    setVisible('errorCard',true);
+    document.getElementById('errorText').textContent='Tamamlama onayı yalnızca doğrulanmış görev için kullanılabilir.';
+    return;
+  }
+  const b=document.getElementById('completeBtn');b.disabled=true;b.textContent='TAMAMLANIYOR...';
+  try{
+    const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'COMPLETE',task:task.id})});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error||'Tamamlama kaydedilemedi.');
+    saveRunState(data);render(data);
+  }catch(e){
+    setVisible('errorCard',true);document.getElementById('errorText').textContent=e.message||'Tamamlama kaydedilemedi.';
+  }finally{b.disabled=false;b.textContent='DOĞRULANDI, TAMAMLAMAYI ONAYLA'}
+}
 let refreshBusy=false;
 function hasLifecycleState(data){const s=normalizeState(data);return !!(s&&s.task_lifecycle&&Array.isArray(s.task_lifecycle.FUTURE)&&Array.isArray(s.task_lifecycle.COMPLETED))}
-function hasActiveRunState(data){const s=normalizeState(data),l=s.task_lifecycle||{},g=s.authority_gate||{},status=String(s.status||'').toUpperCase();return !!((l.FUTURE||[]).length||(l.NOW&&l.NOW.id)||g.pending_approval||['RUNNING','EXECUTING','IN_PROGRESS','PROPOSAL_READY','AWAITING_AUTHORITY','APPROVED'].includes(status))}
+function hasActiveRunState(data){const s=normalizeState(data),l=s.task_lifecycle||{},g=s.authority_gate||{},status=String(s.status||'').toUpperCase();return !!((l.FUTURE||[]).length||(l.NOW&&l.NOW.id)||g.pending_approval||['RUNNING','EXECUTING','IN_PROGRESS','PROPOSAL_READY','AWAITING_AUTHORITY','APPROVED','AWAITING_COMPLETION_AUTHORITY'].includes(status))}
 function isTerminalState(data){const s=normalizeState(data),l=s.task_lifecycle||{},status=String(s.status||'').toUpperCase();return !!((l.COMPLETED||[]).length||['COMPLETED','VERIFIED','DONE','SUCCESS'].includes(status))}
 async function refresh(){if(refreshBusy)return;refreshBusy=true;try{const r=await fetch('/api/status',{headers:token()?{'X-AIPP-Panel-Token':token()}:{} });if(r.status===401){document.getElementById('runtime').textContent='GİRİŞ GEREKİYOR';document.getElementById('authState').textContent='Panel token gerekiyor';return}if(!r.ok)throw new Error();const data=await r.json();document.getElementById('runtime').textContent=data.ok===false?'BAĞLANTI HATASI':'BAĞLI';const previous=lastRunState;const fresh=normalizeState(data),freshStatus=String(fresh.status||'').toUpperCase();if(hasActiveRunState(previous)&&!isTerminalState(data)&&!hasActiveRunState(data)){return}if(!hasLifecycleState(data)&&hasLifecycleState(previous)){return}render(data);saveRunState(data);}catch(_){document.getElementById('runtime').textContent='BAĞLANTI SORUNU'}finally{refreshBusy=false}}
 document.getElementById('panelToken').value=token();updateAuth();refresh();
