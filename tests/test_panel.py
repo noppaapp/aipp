@@ -42,11 +42,12 @@ def test_panel_forwards_force_refresh_flag(monkeypatch):
         return {"ok": True, "status": "PROPOSAL_READY"}
 
     monkeypatch.setattr(panel_server, "runtime_request", fake_runtime_request)
-    monkeypatch.setattr(panel_server, "PANEL_TOKEN", "")
+    monkeypatch.setattr(panel_server, "PANEL_TOKEN", "test-panel-token")
 
     client = panel_server.app.test_client()
     response = client.post(
         "/api/command",
+        headers={"X-AIPP-Panel-Token": "test-panel-token"},
         json={"command": "BAŞLA", "force_refresh": True},
     )
 
@@ -91,7 +92,7 @@ def test_panel_config_status_exposes_configuration_without_secrets(monkeypatch):
     assert data["ok"] is True
     assert data["runtime_url_configured"] is True
     assert data["runtime_token_configured"] is True
-    assert data["panel_token_configured"] is False
+    assert data["panel_token_configured"] is True
     assert data["runtime_token_fingerprint"] == panel_server.fingerprint("test-runtime-token")
     assert "test-runtime-token" not in response.get_data(as_text=True)
 
