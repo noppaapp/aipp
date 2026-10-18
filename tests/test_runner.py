@@ -103,3 +103,30 @@ def test_project_intelligence_persists_drive_scan_for_panel_state():
     assert state["project_intelligence"]["drive_scan"]["files_scanned"] == 15
     assert state["project_intelligence"]["drive_scan"]["documents_read"] == 15
     assert state["project_intelligence"]["documents_scanned"] == 15
+
+
+def test_verification_always_requires_human_completion_authority(tmp_path, monkeypatch):
+    import aipp_runner
+
+    monkeypatch.delenv("AIPP_REQUIRE_COMPLETION_GATE", raising=False)
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    artifact = artifact_dir / "TASK-01-execution.json"
+    artifact.write_text(json.dumps({"task_id": "TASK-01", "result": "EXECUTED"}), encoding="utf-8")
+    state = {
+        "status": "EXECUTED",
+        "step": 3,
+        "task_lifecycle": {
+            "NOW": {"id": "TASK-01", "status": "EXECUTED", "artifact": "artifacts/TASK-01-execution.json"},
+            "FUTURE": [], "COMPLETED": [],
+        },
+        "authority_gate": {},
+    }
+
+    result = aipp_runner.verify_task(state, tmp_path)
+
+    assert result["status"] == "AWAITING_COMPLETION_AUTHORITY"
+    assert result["task_lifecycle"]["NOW"]["status"] == "VERIFIED"
+    assert result["task_lifecycle"]["COMPLETED"] == []
+    assert result["authority_gate"]["pending_completion"] == "TASK-01"
+    assert result["authority_gate"]["last_action"] == "VERIFICATION_PASSED_AWAITING_COMPLETION_AUTHORITY"

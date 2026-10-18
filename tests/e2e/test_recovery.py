@@ -39,5 +39,6 @@ def test_failed_verification_preserves_executable_state(tmp_path):
         "result": "EXECUTED",
     })
     state = aipp_runner.verify_task(state, workspace)
-    assert state["status"] == "COMPLETED"
-    assert state["task_lifecycle"]["NOW"] is None
+    assert state["status"] == "AWAITING_COMPLETION_AUTHORITY"
+    assert state["task_lifecycle"]["NOW"]["status"] == "VERIFIED"
+    assert state["task_lifecycle"]["COMPLETED"] == []

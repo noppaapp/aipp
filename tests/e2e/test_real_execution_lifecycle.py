@@ -41,7 +41,8 @@ def test_real_execution_lifecycle_is_deterministic_and_ephemeral(tmp_path):
     assert state["status"] == "EXECUTED"
 
     state = aipp_runner.verify_task(state, tmp_path)
-    assert state["status"] == "COMPLETED"
-    assert state["task_lifecycle"]["NOW"] is None
-    assert state["task_lifecycle"]["COMPLETED"][0]["id"] == "EXECUTION-001"
+    assert state["status"] == "AWAITING_COMPLETION_AUTHORITY"
+    assert state["task_lifecycle"]["NOW"]["status"] == "VERIFIED"
+    assert state["task_lifecycle"]["NOW"]["id"] == "EXECUTION-001"
+    assert state["task_lifecycle"]["COMPLETED"] == []
     assert not (tmp_path / "aipp_state.json").exists()
