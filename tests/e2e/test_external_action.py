@@ -46,10 +46,12 @@ def test_runner_executes_real_external_github_action(tmp_path):
         else:
             os.environ["AIPP_AUTHORITY_LOG_B64"] = old_env
 
-    assert state["status"] == "COMPLETED"
-    completed = state["task_lifecycle"]["COMPLETED"][0]
-    assert completed["id"] == task["id"]
-    artifact = json.loads((tmp_path / completed["artifact"]).read_text(encoding="utf-8"))
+    assert state["status"] == "AWAITING_COMPLETION_AUTHORITY"
+    verified = state["task_lifecycle"]["NOW"]
+    assert verified["id"] == task["id"]
+    assert verified["status"] == "VERIFIED"
+    assert state["task_lifecycle"]["COMPLETED"] == []
+    artifact = json.loads((tmp_path / verified["artifact"]).read_text(encoding="utf-8"))
     assert artifact["external_result"]["action"] == "GITHUB_PROOF_BRANCH"
     assert artifact["external_result"]["verified"] is True
     assert not (tmp_path / "aipp_state.json").exists()
