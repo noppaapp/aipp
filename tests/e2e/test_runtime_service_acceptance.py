@@ -26,7 +26,7 @@ def service(tmp_path, monkeypatch):
     drive.add("PROJECT_BOOT.md", BOOT)
     sub = drive.folder("proje-a")
     drive.add("notlar.md", "# Notlar\nBu bir referans notudur.\n", parent=sub)
-    monkeypatch.delenv("AIPP_RUNTIME_TOKEN", raising=False)
+    monkeypatch.setenv("AIPP_RUNTIME_TOKEN", "test-runtime-token")
     monkeypatch.delenv("AIPP_AUTHORITY_PUBKEY", raising=False)
     monkeypatch.setattr(runtime_service, "SESSION_STATE_PATH", tmp_path / "session.json")
     monkeypatch.setattr(runtime_service, "analyze_with_ai",
@@ -44,7 +44,7 @@ def call(client, command, task=None):
     body = {"command": command}
     if task:
         body["task"] = task
-    response = client.post("/api/run", json=body)
+    response = client.post("/api/run", json=body, headers={"X-AIPP-Runtime-Token": "test-runtime-token"})
     return response.status_code, response.get_json()
 
 def test_full_cycle_against_fake_drive(service):
@@ -71,7 +71,7 @@ def test_full_cycle_against_fake_drive(service):
     assert data["result"]["task_lifecycle"]["NOW"]["id"] == "TASK-10"
     assert data["result"]["task_lifecycle"]["NOW"]["status"] == "VERIFIED"
     assert data["result"]["task_lifecycle"]["COMPLETED"] == []
-    persisted = client.get("/api/status").get_json()
+    persisted = client.get("/api/status", headers={"X-AIPP-Runtime-Token": "test-runtime-token"}).get_json()
     assert persisted["ok"] and persisted["task_lifecycle"]["NOW"]["status"] == "VERIFIED"
     assert persisted["status"] == "AWAITING_COMPLETION_AUTHORITY"
     assert drive.text("AIPP_SESSION_STATE.json")
