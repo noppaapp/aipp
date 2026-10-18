@@ -94,8 +94,10 @@ def test_runner_continuation_consumes_canonical_approval(tmp_path, monkeypatch):
             os.environ["AIPP_AUTHORITY_LOG_B64"] = previous
 
     state = json.loads(result.stdout)
-    assert state["status"] == "COMPLETED"
-    assert state["authority_gate"]["last_action"] == "VERIFIED"
-    assert state["task_lifecycle"]["COMPLETED"][0]["id"] == "SESSION-001"
+    assert state["status"] == "AWAITING_COMPLETION_AUTHORITY"
+    assert state["authority_gate"]["last_action"] == "VERIFICATION_PASSED_AWAITING_COMPLETION_AUTHORITY"
+    assert state["task_lifecycle"]["NOW"]["id"] == "SESSION-001"
+    assert state["task_lifecycle"]["NOW"]["status"] == "VERIFIED"
+    assert state["task_lifecycle"]["COMPLETED"] == []
     assert (tmp_path / "artifacts" / "SESSION-001-execution.json").exists()
     assert not (tmp_path / "aipp_state.json").exists()
