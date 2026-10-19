@@ -123,3 +123,25 @@ def test_boot_version_update_proposal_refuses_ambiguous_or_unconfirmed_drift():
 
     assert build_boot_version_update_proposal("v1.0 and v1.0", "drive-file-identifier-123", "AIPP v1.1.1") is None
     assert build_boot_version_update_proposal("AIPP v1.0", "drive-file-identifier-123", "AIPP v1.0") is None
+
+
+
+def test_similarity_tokens_are_precomputed_once_per_document(monkeypatch):
+    import project_intelligence
+
+    original_tokens = project_intelligence._tokens
+    tokenized = []
+
+    def counting_tokens(text):
+        tokenized.append(text)
+        return original_tokens(text)
+
+    monkeypatch.setattr(project_intelligence, "_tokens", counting_tokens)
+    documents = [
+        {"id": str(i), "name": f"document-{i}.md", "text": f"unique content sample {i}"}
+        for i in range(4)
+    ]
+
+    project_intelligence.analyze_documents(documents)
+
+    assert tokenized == [document["text"] for document in documents]
