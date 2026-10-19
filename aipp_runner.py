@@ -17,6 +17,7 @@ from aipp_drive_runtime import reconcile_discovered_tasks
 from runtime.continuation import ContinuationHalt, continue_verified
 from runtime.github_external import ExternalActionHalt, execute_bounded_github_proof
 from runtime.github_target import TargetProjectHalt, apply_text_file
+from runtime.gdrive_target import DriveTargetHalt, apply_project_boot_text
 
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
@@ -144,7 +145,7 @@ def reconcile_project_intelligence(state, intelligence):
     result = state
     lifecycle = result.setdefault("task_lifecycle", {})
     future = lifecycle.setdefault("FUTURE", [])
-    priority_rank = {"status_conflict":100,"task_definition_drift":95,"newer_supporting_source":85,"actionable_untracked_idea":70,"near_duplicate":60,"workspace_review_required":10}
+    priority_rank = {"boot_version_mismatch":110,"status_conflict":100,"task_definition_drift":95,"newer_supporting_source":85,"actionable_untracked_idea":70,"near_duplicate":60,"workspace_review_required":10}
     existing_ids = {
         task.get("id")
         for bucket in ("NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED")
@@ -156,8 +157,11 @@ def reconcile_project_intelligence(state, intelligence):
     future[:] = [
         task for task in future
         if not (
-            str(task.get("id", "")).startswith("INTEL-")
-            and task.get("source", {}).get("finding_type") == "workspace_review_required"
+            (
+                str(task.get("id", "")).startswith("INTEL-")
+                and task.get("source", {}).get("finding_type") == "workspace_review_required"
+            )
+            or task.get("source", {}).get("finding_type") == "boot_version_mismatch"
         )
     ]
     existing_ids = {
@@ -167,17 +171,26 @@ def reconcile_project_intelligence(state, intelligence):
         if isinstance(task, dict) and task.get("id")
     }
     for proposal in intelligence.get("proposals", []):
-        fingerprint = json.dumps({
+        fingerprint_payload = {
             "action": proposal.get("action"),
             "target": proposal.get("target"),
             "finding_type": proposal.get("finding_type"),
-        }, ensure_ascii=False, sort_keys=True)
+            "external_action": proposal.get("external_action"),
+            "target_file_id": proposal.get("target_file_id"),
+            "target_file_name": proposal.get("target_file_name"),
+            "target_expected_sha256": proposal.get("target_expected_sha256"),
+        }
+        if proposal.get("target_content") is not None:
+            fingerprint_payload["target_content_sha256"] = hashlib.sha256(
+                str(proposal["target_content"]).encode("utf-8")
+            ).hexdigest()
+        fingerprint = json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True)
         proposal_id_value = "INTEL-" + hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:10].upper()
         if proposal_id_value in existing_ids:
             continue
         future.append({
             "id": proposal_id_value,
-            "title": f"İncele: {proposal.get('target')}",
+            "title": (f"Uygula: {proposal.get('target')} sürüm düzeltmesi" if proposal.get("external_action") == "GDRIVE_PROJECT_BOOT_TEXT" else f"İncele: {proposal.get('target')}"),
             "description": proposal.get("reason"),
             "status": "PROPOSED",
             "proposal_reason": proposal.get("reason"),
@@ -193,6 +206,13 @@ def reconcile_project_intelligence(state, intelligence):
             "requires_authority": True,
             "priority": int(proposal.get("priority", priority_rank.get(proposal.get("finding_type"), 50))),
         })
+        task = future[-1]
+        for field in (
+            "external_action", "target_file_id", "target_file_name",
+            "target_expected_sha256", "target_content", "capability",
+        ):
+            if field in proposal:
+                task[field] = proposal[field]
         existing_ids.add(proposal_id_value)
     future.sort(key=lambda item: (-int(item.get("priority", 50)), str(item.get("id", ""))))
     result["intelligence_queue"] = [item.get("id") for item in future if item.get("id")]
@@ -382,7 +402,7 @@ def execute_task(state, workspace):
     # Review-only proposals must never be treated as executable tasks.
     # Ordinary tasks may produce a clearly labelled local artifact, but that
     # must not be confused with a real external mutation.
-    supported_actions = {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}
+    supported_actions = {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE", "GDRIVE_PROJECT_BOOT_TEXT"}
     external_action = task.get("external_action")
     finding_type = (task.get("source") or {}).get("finding_type")
     review_only_types = {"workspace_review_required", "actionable_untracked_idea"}
@@ -402,7 +422,9 @@ def execute_task(state, workspace):
             external_result = execute_bounded_github_proof(task["id"])
         elif task.get("external_action") == "GITHUB_TARGET_TEXT_FILE":
             external_result = apply_text_file(task["id"], task.get("target_path", ""), task.get("target_content", ""), title=task.get("title"), body=task.get("description"))
-    except (ExternalActionHalt, TargetProjectHalt) as exc:
+        elif task.get("external_action") == "GDRIVE_PROJECT_BOOT_TEXT":
+            external_result = apply_project_boot_text(task["id"], task.get("target_file_id", ""), task.get("target_file_name", ""), task.get("target_expected_sha256", ""), task.get("target_content", ""))
+    except (ExternalActionHalt, TargetProjectHalt, DriveTargetHalt) as exc:
         raise RuntimeError(str(exc)) from exc
     artifact_dir = Path(workspace) / ARTIFACT_DIR
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -445,7 +467,7 @@ def verify_task(state, workspace):
         raise RuntimeError("HALT: Artifact verification failed")
     if action_mode == "LOCAL_ONLY" and task.get("external_action") not in {None, "LOCAL_ONLY"}:
         raise RuntimeError("HALT: Local artifact does not match the approved action")
-    if action_mode == "EXTERNAL" and task.get("external_action") not in {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}:
+    if action_mode == "EXTERNAL" and task.get("external_action") not in {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE", "GDRIVE_PROJECT_BOOT_TEXT"}:
         raise RuntimeError("HALT: External artifact does not match the approved action")
     if task.get("external_action") == "GITHUB_PROOF_BRANCH":
         external = artifact.get("external_result") or {}
@@ -455,6 +477,11 @@ def verify_task(state, workspace):
         external = artifact.get("external_result") or {}
         if not external.get("repository") or not external.get("branch") or not external.get("pull_request"):
             raise RuntimeError("HALT: Target project execution verification failed")
+    if task.get("external_action") == "GDRIVE_PROJECT_BOOT_TEXT":
+        external = artifact.get("external_result") or {}
+        expected_hash = hashlib.sha256(str(task.get("target_content", "")).encode("utf-8")).hexdigest()
+        if external.get("action") != "GDRIVE_PROJECT_BOOT_TEXT" or external.get("verified") is not True or external.get("file_id") != task.get("target_file_id") or external.get("content_sha256") != expected_hash:
+            raise RuntimeError("HALT: Google Drive target file verification failed")
     if task.get("binding_digest") is not None and task["binding_digest"] != binding_digest(task):
         raise RuntimeError("HALT: Task payload changed after approval (binding digest mismatch)")
     task["verified_at"] = utc_now()

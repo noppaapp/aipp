@@ -103,3 +103,23 @@ def test_code_artifact_does_not_become_untracked_actionable_proposal():
     assert any(p["finding_type"] == "workspace_review_required" for p in result["proposals"])
     assert not any(p["finding_type"] == "actionable_untracked_idea" for p in result["proposals"])
     assert result["evidence"][0]["kind"] == "artifact"
+
+
+def test_boot_version_update_proposal_binds_exact_content_and_expected_hash():
+    import hashlib
+    from project_intelligence import build_boot_version_update_proposal
+
+    boot = "# AIPP v1.0 runtime workspace\\nStatus: ACTIVE\\n"
+    proposal = build_boot_version_update_proposal(boot, "drive-file-identifier-123", "# AIPP v1.1.1 Final")
+    assert proposal["external_action"] == "GDRIVE_PROJECT_BOOT_TEXT"
+    assert proposal["target_file_id"] == "drive-file-identifier-123"
+    assert proposal["target_content"] == "# AIPP v1.1.1 runtime workspace\\nStatus: ACTIVE\\n"
+    assert proposal["target_expected_sha256"] == hashlib.sha256(boot.encode()).hexdigest()
+    assert proposal["requires_authority"] is True
+
+
+def test_boot_version_update_proposal_refuses_ambiguous_or_unconfirmed_drift():
+    from project_intelligence import build_boot_version_update_proposal
+
+    assert build_boot_version_update_proposal("v1.0 and v1.0", "drive-file-identifier-123", "AIPP v1.1.1") is None
+    assert build_boot_version_update_proposal("AIPP v1.0", "drive-file-identifier-123", "AIPP v1.0") is None
