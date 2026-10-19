@@ -556,7 +556,7 @@ def continue_execution(state, workspace, max_attempts=3):
         if action_mode == "LOCAL_ONLY":
             valid = valid and task.get("external_action") in {None, "LOCAL_ONLY"}
         elif action_mode == "EXTERNAL":
-            valid = valid and task.get("external_action") in {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}
+            valid = valid and task.get("external_action") in {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE", "GDRIVE_PROJECT_BOOT_TEXT"}
         else:
             valid = False
         if task.get("external_action") == "GITHUB_PROOF_BRANCH":

@@ -266,7 +266,7 @@ function showReview(){
   document.getElementById('requestApprovalBtn').classList.toggle('hidden',approved);
   const reviewedBtn=document.getElementById('reviewApprovedActionBtn');
   const explicitAction=currentProposal.next_action||currentProposal.action||currentProposal.execution_plan;
-  const supportedAction=['GITHUB_PROOF_BRANCH','GITHUB_TARGET_TEXT_FILE'].includes(currentProposal.external_action);
+  const supportedAction=['GITHUB_PROOF_BRANCH','GITHUB_TARGET_TEXT_FILE','GDRIVE_PROJECT_BOOT_TEXT'].includes(currentProposal.external_action);
   reviewedBtn.classList.toggle('hidden',!approved);
   reviewedBtn.disabled=approved&&(!explicitAction||!supportedAction);
   reviewedBtn.textContent=!explicitAction?'İŞLEM AÇIKLAMASI EKSİK':(!supportedAction?'GERÇEK UYGULAMA TÜRÜ DESTEKLENMİYOR':'İŞLEMİ ANLADIM, UYGULAMAYA GEÇ');
@@ -282,7 +282,7 @@ function confirmApprovedActionReviewed(){
     document.getElementById('reviewNextAction').textContent='İşlem açıklaması eksik. Uygulama güvenlik nedeniyle kapalı tutuluyor.';
     return;
   }
-  if(!['GITHUB_PROOF_BRANCH','GITHUB_TARGET_TEXT_FILE'].includes(currentProposal.external_action)){
+  if(!['GITHUB_PROOF_BRANCH','GITHUB_TARGET_TEXT_FILE','GDRIVE_PROJECT_BOOT_TEXT'].includes(currentProposal.external_action)){
     document.getElementById('reviewNextAction').textContent='Bu öneri için desteklenen gerçek bir uygulama işlemi tanımlı değil. Kaynak ve işlem türü doğrulanmadan uygulama başlatılamaz.';
     return;
   }
