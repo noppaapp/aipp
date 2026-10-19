@@ -29,7 +29,9 @@ def test_old_proposal_refresh_does_not_approve_a_new_proposal(monkeypatch):
     monkeypatch.setattr(runtime_service, "_save_session_state", lambda value: saved.append(value))
     monkeypatch.setattr(
         runtime_service, "_run_aipp",
-        lambda *args, **kwargs: (0, current_state, json.dumps(current_state), ""),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("stale approval must not start a workspace scan")
+        ),
     )
     monkeypatch.setattr(
         runtime_service, "write_session_state",
@@ -47,10 +49,10 @@ def test_old_proposal_refresh_does_not_approve_a_new_proposal(monkeypatch):
 
     assert response.status_code == 409
     body = response.get_json()
-    assert body["refreshed"] is True
-    assert body["result"]["task_lifecycle"]["FUTURE"][0]["id"] == "CURRENT"
-    assert saved
-    assert writes == [current_state]
+    assert body["stale_proposal"] is True
+    assert "hiçbir tarama başlatılmadı" in body["error"].lower()
+    assert saved == []
+    assert writes == []
 
 
 
