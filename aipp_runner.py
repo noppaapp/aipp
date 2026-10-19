@@ -520,7 +520,18 @@ def continue_execution(state, workspace, max_attempts=3):
             task["status"] = "NOW"
             return False
         artifact = load_json(artifact_path)
-        valid = artifact.get("task_id") == task.get("id") and artifact.get("result") == "EXECUTED"
+        action_mode = artifact.get("action_mode")
+        valid_result = (
+            (action_mode == "EXTERNAL" and artifact.get("result") == "EXECUTED")
+            or (action_mode == "LOCAL_ONLY" and artifact.get("result") == "LOCAL_ARTIFACT_CREATED")
+        )
+        valid = artifact.get("task_id") == task.get("id") and valid_result
+        if action_mode == "LOCAL_ONLY":
+            valid = valid and task.get("external_action") in {None, "LOCAL_ONLY"}
+        elif action_mode == "EXTERNAL":
+            valid = valid and task.get("external_action") in {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}
+        else:
+            valid = False
         if task.get("external_action") == "GITHUB_PROOF_BRANCH":
             external = artifact.get("external_result") or {}
             valid = valid and external.get("action") == "GITHUB_PROOF_BRANCH" and external.get("verified") is True
