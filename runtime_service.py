@@ -19,6 +19,7 @@ from aipp_drive_runtime import (
     read_session_state,
     write_session_state,
     discover_task_candidates,
+    list_workspace_tree,
     get_credentials,
 )
 from project_intelligence import analyze_documents, build_boot_version_update_proposal
@@ -112,7 +113,7 @@ def _oauth_client_fingerprint():
         return "INVALID_OR_MISSING"
 
 
-def _drive_context(include_ai=True):
+def _drive_context(include_ai=True, recovery_mode=False):
     token = get_access_token()
     folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
     if not folder_id:
@@ -131,6 +132,56 @@ def _drive_context(include_ai=True):
         authority_text = read_file_text(token, authority_info)
         if authority_text is None:
             raise RuntimeError("HALT: AUTHORITY_LOG.md could not be read from Google Drive")
+
+    if recovery_mode:
+        # A stale-approval recovery only needs the canonical boot and protocol
+        # documents. Scanning every PDF in both AIPP and Noppa during this
+        # request caused avoidable memory pressure and worker termination.
+        files = list_workspace_tree(token, folder_id)
+        protocol_info = next((item for item in files if item.get("name") == "AIPP.md"), None)
+        protocol_text = read_file_text(token, protocol_info) if protocol_info else ""
+        if protocol_text is None:
+            protocol_text = ""
+        intelligence = {
+            "version": "1.1.1",
+            "findings": [],
+            "proposals": [],
+            "drive_scan": {
+                "files_scanned": 2 if protocol_info else 1,
+                "documents_read": 2 if protocol_info else 1,
+                "documents_unreadable": 0,
+                "folders_scanned": 0,
+                "task_candidates": 0,
+            },
+            "project_scopes": {
+                "AIPP": {
+                    "configured": True,
+                    "documents_scanned": 2 if protocol_info else 1,
+                    "status": "TARGETED_RECOVERY_SCAN",
+                },
+                "NOPPA": {
+                    "configured": False,
+                    "status": "NOT_SCANNED_FOR_RECOVERY",
+                    "message": "Recovery intentionally skips unrelated workspace documents.",
+                },
+            },
+            "semantic": {
+                "enabled": False,
+                "available": False,
+                "reason": "targeted recovery does not call semantic AI",
+            },
+        }
+        boot_proposal = build_boot_version_update_proposal(
+            boot_text, boot_info.get("id"), protocol_text
+        )
+        if boot_proposal:
+            intelligence["findings"].append({
+                "type": "boot_version_mismatch",
+                "file_name": "PROJECT_BOOT.md",
+                "evidence": boot_proposal["evidence"],
+            })
+            intelligence["proposals"].append(boot_proposal)
+        return boot_text, authority_text, [], intelligence
 
     candidates, documents, drive_scan = discover_task_candidates(token, folder_id, include_documents=True)
     intelligence = analyze_documents(documents)
@@ -232,7 +283,7 @@ def _drive_context(include_ai=True):
     return boot_text, authority_text, candidates, intelligence
 
 
-def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persisted_state=False, authority_text_override=None, reset_session_state=False):
+def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persisted_state=False, authority_text_override=None, reset_session_state=False, recovery_mode=False):
     session_state = None if reset_session_state else _load_session_state()
     if isinstance(session_state, dict) and isinstance(session_state.get("result"), dict):
         session_state = session_state["result"]
@@ -241,7 +292,9 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persist
     if reuse_persisted_state and session_state:
         boot_text, authority_text, candidates, intelligence = "", "", [], {"version":"0","findings":[],"proposals":[]}
     else:
-        boot_text, authority_text, candidates, intelligence = _drive_context(include_ai=include_ai)
+        boot_text, authority_text, candidates, intelligence = _drive_context(
+            include_ai=include_ai, recovery_mode=recovery_mode
+        )
 
     env = os.environ.copy()
     if reset_session_state:
@@ -486,6 +539,7 @@ def run():
             code, refreshed, stdout, stderr = _run_aipp(
                 "BAŞLA", None, max_attempts, include_ai=False,
                 reuse_persisted_state=False, reset_session_state=True,
+                recovery_mode=True,
             )
             if code != 0 or not isinstance(refreshed, dict):
                 recovery_state["status"] = "RECOVERY_FAILED"
