@@ -17,6 +17,7 @@ from aipp_drive_runtime import reconcile_discovered_tasks
 from runtime.continuation import ContinuationHalt, continue_verified
 from runtime.github_external import ExternalActionHalt, execute_bounded_github_proof
 from runtime.github_target import TargetProjectHalt, apply_text_file
+from runtime.gdrive_target import DriveTargetHalt, apply_project_boot_text
 
 AIPP_SPEC = "AIPP.md"
 ARTIFACT_DIR = Path("artifacts")
@@ -382,7 +383,7 @@ def execute_task(state, workspace):
     # Review-only proposals must never be treated as executable tasks.
     # Ordinary tasks may produce a clearly labelled local artifact, but that
     # must not be confused with a real external mutation.
-    supported_actions = {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}
+    supported_actions = {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE", "GDRIVE_PROJECT_BOOT_TEXT"}
     external_action = task.get("external_action")
     finding_type = (task.get("source") or {}).get("finding_type")
     review_only_types = {"workspace_review_required", "actionable_untracked_idea"}
@@ -402,7 +403,9 @@ def execute_task(state, workspace):
             external_result = execute_bounded_github_proof(task["id"])
         elif task.get("external_action") == "GITHUB_TARGET_TEXT_FILE":
             external_result = apply_text_file(task["id"], task.get("target_path", ""), task.get("target_content", ""), title=task.get("title"), body=task.get("description"))
-    except (ExternalActionHalt, TargetProjectHalt) as exc:
+        elif task.get("external_action") == "GDRIVE_PROJECT_BOOT_TEXT":
+            external_result = apply_project_boot_text(task["id"], task.get("target_file_id", ""), task.get("target_file_name", ""), task.get("target_expected_sha256", ""), task.get("target_content", ""))
+    except (ExternalActionHalt, TargetProjectHalt, DriveTargetHalt) as exc:
         raise RuntimeError(str(exc)) from exc
     artifact_dir = Path(workspace) / ARTIFACT_DIR
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -445,7 +448,7 @@ def verify_task(state, workspace):
         raise RuntimeError("HALT: Artifact verification failed")
     if action_mode == "LOCAL_ONLY" and task.get("external_action") not in {None, "LOCAL_ONLY"}:
         raise RuntimeError("HALT: Local artifact does not match the approved action")
-    if action_mode == "EXTERNAL" and task.get("external_action") not in {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}:
+    if action_mode == "EXTERNAL" and task.get("external_action") not in {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE", "GDRIVE_PROJECT_BOOT_TEXT"}:
         raise RuntimeError("HALT: External artifact does not match the approved action")
     if task.get("external_action") == "GITHUB_PROOF_BRANCH":
         external = artifact.get("external_result") or {}
@@ -455,6 +458,11 @@ def verify_task(state, workspace):
         external = artifact.get("external_result") or {}
         if not external.get("repository") or not external.get("branch") or not external.get("pull_request"):
             raise RuntimeError("HALT: Target project execution verification failed")
+    if task.get("external_action") == "GDRIVE_PROJECT_BOOT_TEXT":
+        external = artifact.get("external_result") or {}
+        expected_hash = hashlib.sha256(str(task.get("target_content", "")).encode("utf-8")).hexdigest()
+        if external.get("action") != "GDRIVE_PROJECT_BOOT_TEXT" or external.get("verified") is not True or external.get("file_id") != task.get("target_file_id") or external.get("content_sha256") != expected_hash:
+            raise RuntimeError("HALT: Google Drive target file verification failed")
     if task.get("binding_digest") is not None and task["binding_digest"] != binding_digest(task):
         raise RuntimeError("HALT: Task payload changed after approval (binding digest mismatch)")
     task["verified_at"] = utc_now()
