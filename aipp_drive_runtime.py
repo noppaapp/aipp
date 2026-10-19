@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 try:
     from pypdf import PdfReader
@@ -39,7 +39,7 @@ def _request(url, method="GET", data=None, token=None, content_type=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     if content_type:
         headers["Content-Type"] = content_type
-    with urlopen(Request(url, data=data, headers=headers, method=method)) as response:
+    with urlopen(Request(url, data=data, headers=headers, method=method), timeout=20) as response:
         return response.read()
 
 
@@ -278,7 +278,7 @@ def read_file_text(token, file_info):
         endpoint = f"{DRIVE_API}/files/{file_id}/export?{urlencode({'mimeType': 'text/plain', 'supportsAllDrives': 'true'})}"
         try:
             return _request(endpoint, token=token).decode("utf-8-sig", errors="replace")
-        except HTTPError:
+        except (HTTPError, URLError, TimeoutError):
             return None
     if mime == GOOGLE_SHEET_MIME:
         endpoint = f"{DRIVE_API}/files/{file_id}/export?{urlencode({'mimeType': 'text/csv', 'supportsAllDrives': 'true'})}"
@@ -289,7 +289,7 @@ def read_file_text(token, file_info):
     if mime in TEXT_MIME_TYPES:
         try:
             return _download_binary(token, file_id).decode("utf-8-sig", errors="replace")
-        except (HTTPError, UnicodeDecodeError):
+        except (HTTPError, URLError, TimeoutError, UnicodeDecodeError):
             return None
     if mime == PDF_MIME:
         try:
