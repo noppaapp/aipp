@@ -471,10 +471,15 @@ def run():
             # a new scan and then review the newly generated proposal.
             current_future = (persisted or {}).get("task_lifecycle", {}).get("FUTURE", []) if isinstance(persisted, dict) else []
             if not any(isinstance(item, dict) and item.get("id") == task for item in current_future):
-                raise RuntimeError(
-                    f"HALT: proposal {task} is stale or no longer active. "
-                    "No scan or action was started. Use BAŞLAT explicitly to refresh the workspace, then review the current proposal."
-                )
+                return jsonify({
+                    "ok": False, "command": command, "task": task,
+                    "stale_proposal": True,
+                    "error": (
+                        f"Öneri {task} artık güncel değil. Hiçbir tarama veya işlem başlatılmadı. "
+                        "Çalışma alanını yenilemek için BAŞLAT düğmesine bas; sonra güncel öneriyi incele."
+                    ),
+                    "oauth_client_fingerprint": _oauth_client_fingerprint(),
+                }), 409
         if command == "RECOVER_STALE_APPROVAL":
             if not task:
                 raise RuntimeError("HALT: --task is required to recover a stale approval.")
@@ -635,10 +640,15 @@ def run():
                 # An approval click must never silently trigger BAŞLA. A stale
                 # proposal is rejected without scanning or changing the queue;
                 # the operator must explicitly start a fresh workspace scan.
-                raise RuntimeError(
-                    f"HALT: proposal {task} is stale or no longer active. "
-                    "No scan or action was started. Use BAŞLAT explicitly to refresh the workspace, then review the current proposal."
-                )
+                return jsonify({
+                    "ok": False, "command": command, "task": task,
+                    "stale_proposal": True,
+                    "error": (
+                        f"Öneri {task} artık güncel değil. Onay verilmedi ve hiçbir tarama başlatılmadı. "
+                        "Çalışma alanını yenilemek için BAŞLAT düğmesine bas; sonra güncel öneriyi incele."
+                    ),
+                    "oauth_client_fingerprint": _oauth_client_fingerprint(),
+                }), 409
             from datetime import datetime, timezone
             if os.environ.get("AIPP_AUTHORITY_PUBKEY", "").strip():
                 # Signed-approval mode: the runtime must NOT write approvals.
