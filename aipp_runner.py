@@ -284,14 +284,27 @@ def recommend_next_proposal(state, workspace):
         if (match := re.fullmatch(r"TASK-(\d+)", task_id))
     ]
     next_number = max(numeric_ids, default=0) + 1
+    proof_url = "https://github.com/noppaapp/aipp/blob/main/AIPP_EXECUTION_PROOF.md"
     proposal = {
         "id": f"TASK-{next_number:02d}",
         "title": "AIPP yürütme kanıtını tamamla",
-        "description": "Bekleyen gerçek yürütme kanıtını tamamla ve yapılandırılmış dış yürütme yeteneğini doğrula.",
+        "description": "Geçici bir GitHub kanıt dalı oluştur, uzaktan varlığını doğrula ve ardından dalı sil. PROJECT_BOOT.md veya Noppa proje belgeleri değiştirilmez.",
         "status": "PROPOSED",
         "proposal_reason": "AIPP_EXECUTION_PROOF.md belgesi PROOF_REQUESTED olarak işaretli, ancak bekleyen TASK bulunmuyor.",
         "capability": "external_execution_proof",
-        "source": {"artifact": "AIPP_EXECUTION_PROOF.md", "signal": "PROOF_REQUESTED"},
+        "external_action": "GITHUB_PROOF_BRANCH",
+        "next_action": "Yalnızca bu görev onaylandıktan sonra geçici kanıt dalı oluştur, uzaktan doğrula ve sil. Kanonik proje belgelerine dokunma.",
+        "source": {
+            "artifact": "AIPP_EXECUTION_PROOF.md",
+            "url": proof_url,
+            "signal": "PROOF_REQUESTED",
+            "evidence": [{
+                "file_name": "AIPP_EXECUTION_PROOF.md",
+                "source": "GitHub",
+                "url": proof_url,
+                "quote": "Status: PROOF_REQUESTED",
+            }],
+        },
     }
     lifecycle.setdefault("FUTURE", []).append(proposal)
     state.setdefault("authority_gate", {})["pending_approval"] = None
