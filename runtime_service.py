@@ -244,6 +244,8 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persist
         boot_text, authority_text, candidates, intelligence = _drive_context(include_ai=include_ai)
 
     env = os.environ.copy()
+    if reset_session_state:
+        env.pop("AIPP_SESSION_STATE_B64", None)
     env["AIPP_PROJECT_BOOT_B64"] = base64.b64encode(boot_text.encode()).decode()
     if authority_text_override is not None:
         authority_text = authority_text_override
