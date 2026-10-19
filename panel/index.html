@@ -313,6 +313,14 @@ function confirmApprovedActionReviewed(){
 function renderEvidence(p){const raw=p?.source?.evidence||p?.evidence||[];const ev=Array.isArray(raw)?raw:(raw?[raw]:[]);const d=document.getElementById('evidenceDetails');d.classList.toggle('hidden',!ev.length);document.getElementById('evidence').innerHTML=ev.map(x=>{const url=sourceHref(x),name=x.file_name||x.name||x.title||'Belge';return '<div class="small" style="margin-top:10px"><b>'+escapeHtml(name)+'</b><br>Kaynak: '+escapeHtml(x.source||'Google Drive')+(url?' · <a href="'+escapeHtml(url)+'" target="_blank" rel="noopener noreferrer" style="color:var(--brand)">Kaynağı aç</a>':'<br>Bu kayıtta açılabilir kaynak bağlantısı bulunamadı.')+'<details><summary>Kanıt alıntısı</summary><code>'+escapeHtml(x.quote||'Kanıt alıntısı bulunamadı.')+'</code></details></div>'}).join('')}
 function render(data){const s=normalizeState(data);lastRunState=data;const l=s.task_lifecycle||{},g=s.authority_gate||{},now=l.NOW,p=getProposal(s)||((l.FUTURE||[])[0]||null),intel=s.project_intelligence||{};currentProposal=p;suggestedTask=p?.id||now?.id||'';document.getElementById('runtime').textContent=s.ok===false?'BAĞLANTI HATASI':'BAĞLI';hideFlow();updateWorkspaceMap(s);
 const status=String(s.status||'').toUpperCase(),pending=g.pending_approval,approved=!pending&&now&&String(now.status||'').toUpperCase()==='APPROVED',future=(Array.isArray(l.FUTURE)?l.FUTURE:[]),completed=future.length===0&&!p&&!pending&&!approved&&((l.COMPLETED||[]).length>0||['COMPLETED','VERIFIED','DONE','SUCCESS'].includes(status));const startHidden=!!(s.ok===false||pending||approved||['RUNNING','EXECUTING','IN_PROGRESS','RECOVERY_IN_PROGRESS','RECOVERY_FAILED'].includes(status));document.getElementById('startBtn').classList.toggle('hidden',startHidden);
+if(p && p.source?.artifact==='AIPP_EXECUTION_PROOF.md' && (!p.external_action || !(p.next_action||p.action||p.execution_plan) || !(p.source?.url || p.source?.evidence?.length))){
+  currentProposal=null;suggestedTask='';
+  document.getElementById('status').textContent='İNCELEME GEREKİYOR';
+  document.getElementById('summary').textContent='Bu eski öneride kaynak bağlantısı veya uygulanacak işlem eksik. Onay verilemez ve hiçbir işlem başlatılmaz. Güncel öneriyi hazırlamak için BAŞLAT düğmesine sen basmalısın.';
+  document.getElementById('startBtn').classList.remove('hidden');
+  setVisible('decisionCard',false);setVisible('waitingCard',false);setVisible('reviewCard',false);setVisible('executeCard',false);setVisible('workingCard',false);
+  return;
+}
 if(status==='RECOVERY_IN_PROGRESS'){
   document.getElementById('status').textContent='KURTARMA SÜRÜYOR';
   document.getElementById('summary').textContent='Eski onay iptal edildi. Yeni öneri henüz hazır değil; kurtarma tamamlanmadan başka bir aşama gösterilmeyecek.';
