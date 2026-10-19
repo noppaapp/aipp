@@ -16,7 +16,7 @@ def state(task_id):
 
 
 def test_old_proposal_refresh_does_not_approve_a_new_proposal(monkeypatch):
-    monkeypatch.delenv("AIPP_RUNTIME_TOKEN", raising=False)
+    monkeypatch.setenv("AIPP_RUNTIME_TOKEN", "test-runtime-token")
     monkeypatch.setenv("GDRIVE_FOLDER_ID", "folder")
     old_state = state("OLD")
     current_state = state("CURRENT")
@@ -41,7 +41,8 @@ def test_old_proposal_refresh_does_not_approve_a_new_proposal(monkeypatch):
     )
 
     response = runtime_service.app.test_client().post(
-        "/api/run", json={"command": "APPROVE", "task": "STALE"}
+        "/api/run", json={"command": "APPROVE", "task": "STALE"},
+        headers={"X-AIPP-Runtime-Token": "test-runtime-token"}
     )
 
     assert response.status_code == 409

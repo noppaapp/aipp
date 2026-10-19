@@ -67,7 +67,13 @@ def _token_fingerprint(value):
 def _require_runtime_token(body=None):
     expected = os.environ.get("AIPP_RUNTIME_TOKEN", "").strip()
     if not expected:
-        return
+        # Fail closed: a missing server-side secret must never disable auth.
+        return jsonify(
+            {
+                "ok": False,
+                "error": "Runtime authentication is not configured",
+            }
+        ), 503
 
     body = body or {}
     supplied_token = str(body.get("_runtime_token") or "").strip()
