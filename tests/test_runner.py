@@ -112,7 +112,14 @@ def test_verification_always_requires_human_completion_authority(tmp_path, monke
     artifact_dir = tmp_path / "artifacts"
     artifact_dir.mkdir()
     artifact = artifact_dir / "TASK-01-execution.json"
-    artifact.write_text(json.dumps({"task_id": "TASK-01", "result": "EXECUTED"}), encoding="utf-8")
+    artifact.write_text(
+        json.dumps({
+            "task_id": "TASK-01",
+            "action_mode": "LOCAL_ONLY",
+            "result": "LOCAL_ARTIFACT_CREATED",
+        }),
+        encoding="utf-8",
+    )
     state = {
         "status": "EXECUTED",
         "step": 3,
