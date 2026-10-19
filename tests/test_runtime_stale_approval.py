@@ -154,3 +154,52 @@ def test_failed_recovery_keeps_old_approval_revoked_in_canonical_state(monkeypat
     assert failed["task_lifecycle"]["REFERENCE"][0]["status"] == "STALE_APPROVAL_REVOKED"
     assert failed["authority_gate"]["pending_approval"] is None
     assert failed["recovery_job"]["status"] == "FAILED"
+
+
+
+def test_recovery_context_reads_only_canonical_documents(monkeypatch):
+    monkeypatch.setenv("GDRIVE_FOLDER_ID", "folder")
+    monkeypatch.setenv("NOPPA_GDRIVE_FOLDER_ID", "noppa-folder")
+    monkeypatch.setattr(runtime_service, "get_access_token", lambda: "access")
+    monkeypatch.setattr(runtime_service, "find_project_boot", lambda *_: {"id": "boot-id"})
+    monkeypatch.setattr(runtime_service, "find_authority_log", lambda *_: None)
+    monkeypatch.setattr(
+        runtime_service, "read_file_text",
+        lambda _token, info: {
+            "boot-id": "# PROJECT_BOOT v1.0",
+            "protocol-id": "# AIPP v1.1.1",
+        }.get(info["id"]),
+    )
+    monkeypatch.setattr(
+        runtime_service, "list_workspace_tree",
+        lambda *_: [{"id": "protocol-id", "name": "AIPP.md"}],
+    )
+    monkeypatch.setattr(
+        runtime_service, "build_boot_version_update_proposal",
+        lambda boot, file_id, protocol: {
+            "target": "PROJECT_BOOT.md", "evidence": ["targeted evidence"]
+        },
+    )
+    monkeypatch.setattr(
+        runtime_service, "discover_task_candidates",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("recovery must not scan every workspace document")
+        ),
+    )
+    monkeypatch.setattr(
+        runtime_service, "analyze_documents",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("recovery must not analyze every workspace document")
+        ),
+    )
+
+    boot, authority, candidates, intelligence = runtime_service._drive_context(
+        include_ai=False, recovery_mode=True
+    )
+
+    assert boot == "# PROJECT_BOOT v1.0"
+    assert authority == ""
+    assert candidates == []
+    assert intelligence["project_scopes"]["AIPP"]["status"] == "TARGETED_RECOVERY_SCAN"
+    assert intelligence["project_scopes"]["NOPPA"]["status"] == "NOT_SCANNED_FOR_RECOVERY"
+    assert len(intelligence["proposals"]) == 1
