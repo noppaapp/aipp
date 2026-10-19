@@ -457,8 +457,11 @@ def run():
             stale["superseded_task_id"] = old_id
             stale["id"] = f"STALE-APPROVAL-{suffix}"
             stale["status"] = "STALE_APPROVAL_REVOKED"
+            # Recovery must be bounded and reliable: the semantic AI pass can
+            # make several slow provider calls and exceed the web worker deadline.
+            # Deterministic workspace analysis still runs and preserves the Authority Gate.
             code, refreshed, stdout, stderr = _run_aipp(
-                "BAŞLA", None, max_attempts, include_ai=True,
+                "BAŞLA", None, max_attempts, include_ai=False,
                 reuse_persisted_state=False, reset_session_state=True,
             )
             if code != 0 or not isinstance(refreshed, dict):
