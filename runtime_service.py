@@ -449,26 +449,64 @@ def run():
             supported = {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE", "GDRIVE_PROJECT_BOOT_TEXT"}
             if active.get("external_action") in supported:
                 raise RuntimeError("HALT: this task already has a supported action; recovery is not allowed")
-            # Explicit operator action revokes the stale approval and rebuilds a
-            # fresh proposal. It never executes or edits the target project file.
+            # Revoke and persist the stale approval BEFORE any full Drive scan.
+            # Previously, the old APPROVED snapshot remained canonical until the
+            # entire scan finished; a timeout therefore made the panel resurrect it.
             stale = dict(active)
             old_id = str(active.get("id"))
             suffix = hashlib.sha256(old_id.encode("utf-8")).hexdigest()[:8].upper()
             stale["superseded_task_id"] = old_id
             stale["id"] = f"STALE-APPROVAL-{suffix}"
             stale["status"] = "STALE_APPROVAL_REVOKED"
-            # Recovery must be bounded and reliable: the semantic AI pass can
-            # make several slow provider calls and exceed the web worker deadline.
-            # Deterministic workspace analysis still runs and preserves the Authority Gate.
+            recovery_state = json.loads(json.dumps(current))
+            recovery_lifecycle = recovery_state.setdefault("task_lifecycle", {})
+            recovery_lifecycle["NOW"] = None
+            recovery_lifecycle.setdefault("REFERENCE", []).append(stale)
+            recovery_state["status"] = "RECOVERY_IN_PROGRESS"
+            recovery_state["recovery_job"] = {
+                "status": "IN_PROGRESS",
+                "superseded_task_id": old_id,
+                "started_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                "stage": "WORKSPACE_SCAN",
+            }
+            recovery_gate = recovery_state.setdefault("authority_gate", {})
+            recovery_gate["pending_approval"] = None
+            recovery_gate["pending_proposal_id"] = None
+            recovery_gate["last_action"] = "STALE_APPROVAL_REVOKED_RECOVERY_IN_PROGRESS"
+            recovery_snapshot = {
+                "result": recovery_state,
+                "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            }
+            _save_session_state(recovery_snapshot)
+            # This Drive write is the commit point: do not begin scanning unless
+            # the canonical snapshot no longer contains the old active approval.
+            write_session_state(token, folder_id, recovery_state)
+
+            # Recovery is deterministic and does not call the slow semantic AI provider.
             code, refreshed, stdout, stderr = _run_aipp(
                 "BAŞLA", None, max_attempts, include_ai=False,
                 reuse_persisted_state=False, reset_session_state=True,
             )
             if code != 0 or not isinstance(refreshed, dict):
-                raise RuntimeError(stderr or "HALT: fresh workspace analysis failed; stale approval was not executed")
+                recovery_state["status"] = "RECOVERY_FAILED"
+                recovery_state["recovery_job"]["status"] = "FAILED"
+                recovery_state["recovery_job"]["stage"] = "WORKSPACE_SCAN"
+                recovery_state["recovery_job"]["error"] = (stderr or "Workspace scan failed")[:500]
+                recovery_snapshot = {
+                    "result": recovery_state,
+                    "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                }
+                _save_session_state(recovery_snapshot)
+                write_session_state(token, folder_id, recovery_state)
+                raise RuntimeError(stderr or "HALT: fresh workspace analysis failed; stale approval remains revoked")
             new_lifecycle = refreshed.setdefault("task_lifecycle", {})
             new_lifecycle["NOW"] = None
             new_lifecycle.setdefault("REFERENCE", []).append(stale)
+            refreshed["recovery_job"] = {
+                "status": "COMPLETED",
+                "superseded_task_id": old_id,
+                "completed_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            }
             new_future = new_lifecycle.setdefault("FUTURE", [])
             if new_future:
                 fresh = new_future[0]
