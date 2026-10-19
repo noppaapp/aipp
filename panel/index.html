@@ -76,6 +76,7 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
 <div class="actions">
 <button class="primary choice" id="requestApprovalBtn" onclick="approveHuman()">ONAYLA</button>
 <button class="primary choice hidden" id="reviewApprovedActionBtn" onclick="confirmApprovedActionReviewed()">İŞLEMİ ANLADIM, UYGULAMAYA GEÇ</button>
+<button class="secondary choice hidden" id="recoverStaleApprovalBtn" onclick="recoverStaleApproval()">ESKİ ONAYI İPTAL ET, YENİ ÖNERİ OLUŞTUR</button>
 </div>
 <div class="small" style="margin-top:12px">Onay vermeden gerçek uygulama başlatılmaz.</div>
 <details id="evidenceDetails" class="hidden"><summary>Kaynak ve teknik kanıt</summary><div id="evidence"></div></details>
@@ -268,12 +269,30 @@ function showReview(){
   const explicitAction=currentProposal.next_action||currentProposal.action||currentProposal.execution_plan;
   const supportedAction=['GITHUB_PROOF_BRANCH','GITHUB_TARGET_TEXT_FILE','GDRIVE_PROJECT_BOOT_TEXT'].includes(currentProposal.external_action);
   reviewedBtn.classList.toggle('hidden',!approved);
+  const recoverBtn=document.getElementById('recoverStaleApprovalBtn');
+  recoverBtn.classList.toggle('hidden',!(approved&&!supportedAction));
   reviewedBtn.disabled=approved&&(!explicitAction||!supportedAction);
   reviewedBtn.textContent=!explicitAction?'İŞLEM AÇIKLAMASI EKSİK':(!supportedAction?'GERÇEK UYGULAMA TÜRÜ DESTEKLENMİYOR':'İŞLEMİ ANLADIM, UYGULAMAYA GEÇ');
   document.getElementById('reviewFinding').textContent=explainProposal(currentProposal);
   document.getElementById('reviewRecommendation').textContent=localizeProposalText(currentProposal.recommendation||currentProposal.proposal_reason||currentProposal.reason||'Önerinin gerekçesi kayıtta bulunamadı.');
   document.getElementById('reviewNextAction').textContent=localizeProposalText(explicitAction||(approved?'Kayıtta uygulanacak somut işlem açıklaması bulunamadı. Güvenli şekilde devam edebilmek için bu açıklama gerekli.':'Onaydan sonra yapılacak işlem henüz kesinleşmedi.'));
   renderEvidence(currentProposal)
+}
+async function recoverStaleApproval(){
+  if(!isApprovedProposal(currentProposal)||!suggestedTask)return;
+  const ok=window.confirm('Eski onay geçersiz kılınacak ve güncel öneri yeniden hazırlanacak. Proje dosyaları değiştirilmez; yeni işlem için tekrar onayın gerekir. Devam edilsin mi?');
+  if(!ok)return;
+  const b=document.getElementById('recoverStaleApprovalBtn');
+  b.disabled=true;b.textContent='YENİDEN HAZIRLANIYOR...';
+  try{
+    const r=await fetch('/api/command',{method:'POST',headers:headers(),body:JSON.stringify({command:'RECOVER_STALE_APPROVAL',task:suggestedTask})});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error||'Eski onay güvenli şekilde yenilenemedi.');
+    saveRunState(data);render(data);
+  }catch(e){
+    setVisible('errorCard',true);
+    document.getElementById('errorText').textContent=e.message||'Onay yenilenemedi.';
+  }finally{b.disabled=false;b.textContent='ESKİ ONAYI İPTAL ET, YENİ ÖNERİ OLUŞTUR'}
 }
 function confirmApprovedActionReviewed(){
   if(!isApprovedProposal(currentProposal))return;

@@ -51,3 +51,59 @@ def test_old_proposal_refresh_does_not_approve_a_new_proposal(monkeypatch):
     assert body["result"]["task_lifecycle"]["FUTURE"][0]["id"] == "CURRENT"
     assert saved
     assert writes == [current_state]
+
+
+
+def test_recover_stale_approved_action_revokes_old_approval_and_requires_new_id(monkeypatch):
+    monkeypatch.setenv("AIPP_RUNTIME_TOKEN", "test-runtime-token")
+    monkeypatch.setenv("GDRIVE_FOLDER_ID", "folder")
+    stale = {
+        "ok": True,
+        "status": "NOW",
+        "task_lifecycle": {
+            "NOW": {"id": "OLD-BOOT", "title": "Old boot task", "status": "APPROVED",
+                    "source": {"finding_type": "boot_version_mismatch"}},
+            "FUTURE": [], "REFERENCE": [], "COMPLETED": [],
+        },
+        "authority_gate": {"pending_approval": None, "pending_proposal_id": None},
+    }
+    fresh = {
+        "ok": True, "status": "PROPOSAL_READY",
+        "task_lifecycle": {"NOW": None, "FUTURE": [
+            {"id": "INTEL-NEW", "title": "Update PROJECT_BOOT", "status": "PROPOSED",
+             "external_action": "GDRIVE_PROJECT_BOOT_TEXT",
+             "target_file_id": "drive-id", "target_file_name": "PROJECT_BOOT.md",
+             "target_expected_sha256": "expected", "target_content": "new content",
+             "source": {"finding_type": "boot_version_mismatch"}},
+        ], "REFERENCE": [], "COMPLETED": []},
+        "authority_gate": {"pending_approval": None, "pending_proposal_id": None},
+        "intelligence_queue": ["INTEL-NEW"],
+        "project_intelligence": {"queue": [{"id": "INTEL-NEW", "title": "Update PROJECT_BOOT"}]},
+    }
+    saved, drive_writes = [], []
+    monkeypatch.setattr(runtime_service, "get_access_token", lambda: "access")
+    monkeypatch.setattr(runtime_service, "read_session_state", lambda *_: stale)
+    monkeypatch.setattr(runtime_service, "_load_session_state", lambda: {"result": stale})
+    monkeypatch.setattr(runtime_service, "_save_session_state", lambda value: saved.append(value))
+    monkeypatch.setattr(runtime_service, "write_session_state", lambda *args: drive_writes.append(args[-1]))
+    monkeypatch.setattr(
+        runtime_service, "_run_aipp",
+        lambda *args, **kwargs: (0, fresh, json.dumps(fresh), ""),
+    )
+
+    response = runtime_service.app.test_client().post(
+        "/api/run",
+        json={"command": "RECOVER_STALE_APPROVAL", "task": "OLD-BOOT"},
+        headers={"X-AIPP-Runtime-Token": "test-runtime-token"},
+    )
+
+    assert response.status_code == 200
+    result = response.get_json()["result"]
+    new_task = result["task_lifecycle"]["FUTURE"][0]
+    assert result["task_lifecycle"]["NOW"] is None
+    assert result["task_lifecycle"]["REFERENCE"][0]["status"] == "STALE_APPROVAL_REVOKED"
+    assert new_task["external_action"] == "GDRIVE_PROJECT_BOOT_TEXT"
+    assert new_task["id"] != "INTEL-NEW"
+    assert "yeniden onay gerekli" in new_task["title"]
+    assert result["intelligence_queue"][0] == new_task["id"]
+    assert saved and drive_writes == [result]

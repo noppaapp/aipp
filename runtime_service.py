@@ -232,8 +232,8 @@ def _drive_context(include_ai=True):
     return boot_text, authority_text, candidates, intelligence
 
 
-def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persisted_state=False, authority_text_override=None):
-    session_state = _load_session_state()
+def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persisted_state=False, authority_text_override=None, reset_session_state=False):
+    session_state = None if reset_session_state else _load_session_state()
     if isinstance(session_state, dict) and isinstance(session_state.get("result"), dict):
         session_state = session_state["result"]
     else:
@@ -244,6 +244,8 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persist
         boot_text, authority_text, candidates, intelligence = _drive_context(include_ai=include_ai)
 
     env = os.environ.copy()
+    if reset_session_state:
+        env.pop("AIPP_SESSION_STATE_B64", None)
     env["AIPP_PROJECT_BOOT_B64"] = base64.b64encode(boot_text.encode()).decode()
     if authority_text_override is not None:
         authority_text = authority_text_override
@@ -429,6 +431,74 @@ def run():
                         f"HALT: stale approval target {task}; current FUTURE task is {current or 'none'}. Refresh the panel and select the current proposal."
                     )
                 persisted = refreshed
+        if command == "RECOVER_STALE_APPROVAL":
+            if not task:
+                raise RuntimeError("HALT: --task is required to recover a stale approval.")
+            token = get_access_token()
+            folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+            if not folder_id:
+                raise RuntimeError("HALT: GDRIVE_FOLDER_ID is empty")
+            drive_current = read_session_state(token, folder_id)
+            if isinstance(drive_current, dict) and isinstance(drive_current.get("result"), dict):
+                drive_current = drive_current["result"]
+            current = drive_current if isinstance(drive_current, dict) else persisted
+            lifecycle = (current or {}).get("task_lifecycle", {})
+            active = lifecycle.get("NOW")
+            if not isinstance(active, dict) or active.get("id") != task or str(active.get("status", "")).upper() != "APPROVED":
+                raise RuntimeError("HALT: only the exact currently approved task can be recovered")
+            supported = {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE", "GDRIVE_PROJECT_BOOT_TEXT"}
+            if active.get("external_action") in supported:
+                raise RuntimeError("HALT: this task already has a supported action; recovery is not allowed")
+            # Explicit operator action revokes the stale approval and rebuilds a
+            # fresh proposal. It never executes or edits the target project file.
+            stale = dict(active)
+            old_id = str(active.get("id"))
+            suffix = hashlib.sha256(old_id.encode("utf-8")).hexdigest()[:8].upper()
+            stale["superseded_task_id"] = old_id
+            stale["id"] = f"STALE-APPROVAL-{suffix}"
+            stale["status"] = "STALE_APPROVAL_REVOKED"
+            code, refreshed, stdout, stderr = _run_aipp(
+                "BAŞLA", None, max_attempts, include_ai=True,
+                reuse_persisted_state=False, reset_session_state=True,
+            )
+            if code != 0 or not isinstance(refreshed, dict):
+                raise RuntimeError(stderr or "HALT: fresh workspace analysis failed; stale approval was not executed")
+            new_lifecycle = refreshed.setdefault("task_lifecycle", {})
+            new_lifecycle["NOW"] = None
+            new_lifecycle.setdefault("REFERENCE", []).append(stale)
+            new_future = new_lifecycle.setdefault("FUTURE", [])
+            if new_future:
+                fresh = new_future[0]
+                fresh_id = str(fresh.get("id") or "INTEL-RECOVERED")
+                fresh["id"] = f"{fresh_id}-REAUTH-{suffix}"
+                fresh["title"] = str(fresh.get("title") or "Yeni öneri") + " (yeniden onay gerekli)"
+                refreshed["intelligence_queue"] = [
+                    fresh["id"] if item == fresh_id else item
+                    for item in refreshed.get("intelligence_queue", [])
+                ]
+                for entry in (refreshed.get("project_intelligence") or {}).get("queue", []):
+                    if entry.get("id") == fresh_id:
+                        entry["id"] = fresh["id"]
+                        entry["title"] = fresh["title"]
+                refreshed["status"] = "PROPOSAL_READY"
+                refreshed.setdefault("authority_gate", {})["pending_approval"] = None
+                refreshed["authority_gate"]["pending_proposal_id"] = None
+                refreshed["authority_gate"]["last_action"] = "STALE_APPROVAL_REVOKED_REQUIRES_NEW_APPROVAL"
+            else:
+                refreshed["status"] = "COMPLETED"
+                refreshed.setdefault("authority_gate", {})["pending_approval"] = None
+                refreshed["authority_gate"]["pending_proposal_id"] = None
+                refreshed["authority_gate"]["last_action"] = "STALE_APPROVAL_REVOKED_NO_ACTIONABLE_PROPOSAL"
+            snapshot = {"result": refreshed, "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()}
+            _save_session_state(snapshot)
+            write_session_state(token, folder_id, refreshed)
+            return jsonify({
+                "ok": True, "command": command, "task": task, "result": refreshed,
+                "stdout": json.dumps(refreshed, ensure_ascii=False), "stderr": "",
+                "stale_approval_revoked": True,
+                "oauth_client_fingerprint": _oauth_client_fingerprint(),
+            }), 200
+
         if command == "APPROVE":
             if not task:
                 raise RuntimeError("HALT: --task is required.")
