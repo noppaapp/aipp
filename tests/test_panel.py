@@ -92,7 +92,7 @@ def test_panel_config_status_exposes_configuration_without_secrets(monkeypatch):
     assert data["ok"] is True
     assert data["runtime_url_configured"] is True
     assert data["runtime_token_configured"] is True
-    assert data["panel_token_configured"] is False
+    assert data["panel_token_configured"] is True
     assert data["runtime_token_fingerprint"] == panel_server.fingerprint("test-runtime-token")
     assert "test-runtime-token" not in response.get_data(as_text=True)
 
