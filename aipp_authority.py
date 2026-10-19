@@ -22,7 +22,7 @@ PROPOSAL_PREFIX = "PROP"
 DECISION_APPROVED = "APPROVED"
 DECISION_COMPLETED = "COMPLETED"
 _DECISIONS = {DECISION_APPROVED, DECISION_COMPLETED}
-BINDING_FIELDS = ("external_action", "target_path", "target_content", "capability")
+BINDING_FIELDS = ("external_action", "target_path", "target_content", "capability", "target_file_id", "target_file_name", "target_expected_sha256")
 
 class AuthoritySignatureError(RuntimeError):
     pass
