@@ -4,6 +4,7 @@ Evidence-first only. It never approves, executes, or mutates project content.
 """
 import re
 import difflib
+import hashlib
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -344,4 +345,43 @@ def analyze_documents(documents):
             }
             for d in docs
         ],
+    }
+
+
+def build_boot_version_update_proposal(boot_text, file_id, protocol_text):
+    """Prepare a passive, exact-content proposal for the single known v1.0 -> v1.1.1 drift."""
+    if not isinstance(boot_text, str) or not file_id or "v1.1.1" not in (protocol_text or ""):
+        return None
+    matches = list(re.finditer(r"(?<![A-Za-z0-9.])v1\.0(?![0-9.])", boot_text))
+    if len(matches) != 1:
+        return None
+    match = matches[0]
+    updated = boot_text[:match.start()] + "v1.1.1" + boot_text[match.end():]
+    if updated == boot_text:
+        return None
+    evidence_line = next((line.strip() for line in boot_text.splitlines() if match.group(0) in line), match.group(0))
+    reason = "PROJECT_BOOT.md çalışma sürümü v1.0; kanonik AIPP.md protokolü v1.1.1 olarak işaretli. Yalnızca tekil sürüm belirteci değiştirilecek."
+    evidence = [{
+        "file_name": "PROJECT_BOOT.md",
+        "file_id": file_id,
+        "quote": evidence_line[:500],
+        "source": "Google Drive",
+        "expected_current_sha256": hashlib.sha256(boot_text.encode("utf-8")).hexdigest(),
+    }]
+    return {
+        "action": "UPDATE",
+        "target": "PROJECT_BOOT.md",
+        "reason": reason,
+        "recommendation": "Tam dosya değişikliğini incele; yalnızca açık insan onayından sonra uygula.",
+        "finding_type": "boot_version_mismatch",
+        "evidence": evidence,
+        "requires_authority": True,
+        "status": "PROPOSED",
+        "priority": 110,
+        "external_action": "GDRIVE_PROJECT_BOOT_TEXT",
+        "target_file_id": file_id,
+        "target_file_name": "PROJECT_BOOT.md",
+        "target_expected_sha256": hashlib.sha256(boot_text.encode("utf-8")).hexdigest(),
+        "target_content": updated,
+        "next_action": "Authority Gate üzerinden dosya kimliğini, mevcut içerik özetini ve tam yeni içeriği inceleyip onayla.",
     }
