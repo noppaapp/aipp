@@ -145,7 +145,7 @@ def reconcile_project_intelligence(state, intelligence):
     result = state
     lifecycle = result.setdefault("task_lifecycle", {})
     future = lifecycle.setdefault("FUTURE", [])
-    priority_rank = {"status_conflict":100,"task_definition_drift":95,"newer_supporting_source":85,"actionable_untracked_idea":70,"near_duplicate":60,"workspace_review_required":10}
+    priority_rank = {"boot_version_mismatch":110,"status_conflict":100,"task_definition_drift":95,"newer_supporting_source":85,"actionable_untracked_idea":70,"near_duplicate":60,"workspace_review_required":10}
     existing_ids = {
         task.get("id")
         for bucket in ("NOW", "DEFERRED", "BLOCKED", "FUTURE", "REFERENCE", "COMPLETED")
@@ -157,8 +157,11 @@ def reconcile_project_intelligence(state, intelligence):
     future[:] = [
         task for task in future
         if not (
-            str(task.get("id", "")).startswith("INTEL-")
-            and task.get("source", {}).get("finding_type") == "workspace_review_required"
+            (
+                str(task.get("id", "")).startswith("INTEL-")
+                and task.get("source", {}).get("finding_type") == "workspace_review_required"
+            )
+            or task.get("source", {}).get("finding_type") == "boot_version_mismatch"
         )
     ]
     existing_ids = {
@@ -168,17 +171,26 @@ def reconcile_project_intelligence(state, intelligence):
         if isinstance(task, dict) and task.get("id")
     }
     for proposal in intelligence.get("proposals", []):
-        fingerprint = json.dumps({
+        fingerprint_payload = {
             "action": proposal.get("action"),
             "target": proposal.get("target"),
             "finding_type": proposal.get("finding_type"),
-        }, ensure_ascii=False, sort_keys=True)
+            "external_action": proposal.get("external_action"),
+            "target_file_id": proposal.get("target_file_id"),
+            "target_file_name": proposal.get("target_file_name"),
+            "target_expected_sha256": proposal.get("target_expected_sha256"),
+        }
+        if proposal.get("target_content") is not None:
+            fingerprint_payload["target_content_sha256"] = hashlib.sha256(
+                str(proposal["target_content"]).encode("utf-8")
+            ).hexdigest()
+        fingerprint = json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True)
         proposal_id_value = "INTEL-" + hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:10].upper()
         if proposal_id_value in existing_ids:
             continue
         future.append({
             "id": proposal_id_value,
-            "title": f"İncele: {proposal.get('target')}",
+            "title": (f"Uygula: {proposal.get('target')} sürüm düzeltmesi" if proposal.get("external_action") == "GDRIVE_PROJECT_BOOT_TEXT" else f"İncele: {proposal.get('target')}"),
             "description": proposal.get("reason"),
             "status": "PROPOSED",
             "proposal_reason": proposal.get("reason"),
@@ -194,6 +206,13 @@ def reconcile_project_intelligence(state, intelligence):
             "requires_authority": True,
             "priority": int(proposal.get("priority", priority_rank.get(proposal.get("finding_type"), 50))),
         })
+        task = future[-1]
+        for field in (
+            "external_action", "target_file_id", "target_file_name",
+            "target_expected_sha256", "target_content", "capability",
+        ):
+            if field in proposal:
+                task[field] = proposal[field]
         existing_ids.add(proposal_id_value)
     future.sort(key=lambda item: (-int(item.get("priority", 50)), str(item.get("id", ""))))
     result["intelligence_queue"] = [item.get("id") for item in future if item.get("id")]
