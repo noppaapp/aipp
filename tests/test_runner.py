@@ -75,7 +75,10 @@ def test_runner_creates_passive_next_proposal_from_explicit_proof_signal(tmp_pat
     assert state["task_lifecycle"]["FUTURE"][0]["status"] == "PROPOSED"
     proposal = state["task_lifecycle"]["FUTURE"][0]
     assert proposal["capability"] == "external_execution_proof"
-    assert "github" not in json.dumps(proposal).lower()
+    assert proposal["external_action"] == "GITHUB_PROOF_BRANCH"
+    assert proposal["next_action"].startswith("Yalnızca bu görev onaylandıktan sonra")
+    assert proposal["source"]["url"].endswith("/AIPP_EXECUTION_PROOF.md")
+    assert proposal["source"]["evidence"][0]["quote"] == "Status: PROOF_REQUESTED"
     assert state["authority_gate"]["pending_approval"] is None
     assert state["authority_gate"]["last_action"] == "AUTONOMOUS_PROPOSAL_CREATED"
 
