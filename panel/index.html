@@ -232,7 +232,7 @@ function localizeProposalText(value){
 
 // Convert technical findings into plain Turkish, not merely word-for-word translations.
 function explainProposal(p){
-  const raw=[p?.description,p?.reason,p?.proposal_reason,p?.recommendation,p?.source?.finding_type].filter(Boolean).join(' ');
+  const raw=[...new Set([p?.description,p?.reason,p?.proposal_reason,p?.recommendation,p?.source?.finding_type].filter(Boolean))].join(' ');
   const text=localizeProposalText(raw);
   if(/Actionable language found|Eyleme dönüştürülebilir bir ifade bulundu/i.test(raw)){
     return 'Belgelerde yapılması gereken bir işi anlatan bir ifade bulundu. Ancak bu iş henüz AIPP’nin görev listesine bağlanmamış. Bu, işlemin yapılacağı veya onaylandığı anlamına gelmez. Önce kaynak belgeyi açıp ne istendiğini kontrol et.';
@@ -266,9 +266,10 @@ function showReview(){
   document.getElementById('requestApprovalBtn').classList.toggle('hidden',approved);
   const reviewedBtn=document.getElementById('reviewApprovedActionBtn');
   const explicitAction=currentProposal.next_action||currentProposal.action||currentProposal.execution_plan;
+  const supportedAction=['GITHUB_PROOF_BRANCH','GITHUB_TARGET_TEXT_FILE'].includes(currentProposal.external_action);
   reviewedBtn.classList.toggle('hidden',!approved);
-  reviewedBtn.disabled=approved&&!explicitAction;
-  reviewedBtn.textContent=explicitAction?'İŞLEMİ ANLADIM, UYGULAMAYA GEÇ':'İŞLEM AÇIKLAMASI EKSİK';
+  reviewedBtn.disabled=approved&&(!explicitAction||!supportedAction);
+  reviewedBtn.textContent=!explicitAction?'İŞLEM AÇIKLAMASI EKSİK':(!supportedAction?'GERÇEK UYGULAMA TÜRÜ DESTEKLENMİYOR':'İŞLEMİ ANLADIM, UYGULAMAYA GEÇ');
   document.getElementById('reviewFinding').textContent=explainProposal(currentProposal);
   document.getElementById('reviewRecommendation').textContent=localizeProposalText(currentProposal.recommendation||currentProposal.proposal_reason||currentProposal.reason||'Önerinin gerekçesi kayıtta bulunamadı.');
   document.getElementById('reviewNextAction').textContent=localizeProposalText(explicitAction||(approved?'Kayıtta uygulanacak somut işlem açıklaması bulunamadı. Güvenli şekilde devam edebilmek için bu açıklama gerekli.':'Onaydan sonra yapılacak işlem henüz kesinleşmedi.'));
@@ -279,6 +280,10 @@ function confirmApprovedActionReviewed(){
   const explicitAction=currentProposal.next_action||currentProposal.action||currentProposal.execution_plan;
   if(!explicitAction){
     document.getElementById('reviewNextAction').textContent='İşlem açıklaması eksik. Uygulama güvenlik nedeniyle kapalı tutuluyor.';
+    return;
+  }
+  if(!['GITHUB_PROOF_BRANCH','GITHUB_TARGET_TEXT_FILE'].includes(currentProposal.external_action)){
+    document.getElementById('reviewNextAction').textContent='Bu öneri için desteklenen gerçek bir uygulama işlemi tanımlı değil. Kaynak ve işlem türü doğrulanmadan uygulama başlatılamaz.';
     return;
   }
   const executeBtn=document.getElementById('executeBtn');

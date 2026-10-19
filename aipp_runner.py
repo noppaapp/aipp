@@ -378,6 +378,24 @@ def execute_task(state, workspace):
         task.get("binding_digest") is not None or task.get("status") == "APPROVED"
     ):
         raise RuntimeError("HALT: Task payload changed after approval (binding digest mismatch)")
+
+    # Review-only proposals must never be treated as executable tasks.
+    # Ordinary tasks may produce a clearly labelled local artifact, but that
+    # must not be confused with a real external mutation.
+    supported_actions = {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}
+    external_action = task.get("external_action")
+    finding_type = (task.get("source") or {}).get("finding_type")
+    review_only_types = {"workspace_review_required", "actionable_untracked_idea"}
+    if finding_type in review_only_types:
+        raise RuntimeError(
+            "HALT: İnceleme ve öneri görevleri yürütülemez. Önce uygulanabilir, "
+            "açıkça tanımlanmış bir görev oluşturulmalı; hiçbir işlem yapılmadı."
+        )
+    if external_action not in supported_actions | {None, "LOCAL_ONLY"}:
+        raise RuntimeError(
+            f"HALT: Desteklenmeyen işlem türü: {external_action}. Hiçbir değişiklik yapılmadı."
+        )
+
     external_result = None
     try:
         if task.get("external_action") == "GITHUB_PROOF_BRANCH":
@@ -399,7 +417,9 @@ def execute_task(state, workspace):
             "proposals": intelligence.get("proposals", []),
             "completed_action": "Bütünsel çalışma alanı incelemesi oluşturuldu ve doğrulama için kaydedildi.",
         }
-    save_json(artifact_path, {"task_id": task["id"], "title": task.get("title"), "execution_mode": state.get("execution_mode", "REAL"), "executed_at": utc_now(), "runner": state.get("runner_engine"), "external_result": external_result, "review_result": review_result, "result": "EXECUTED"})
+    action_mode = "EXTERNAL" if external_action in supported_actions else "LOCAL_ONLY"
+    result_label = "EXECUTED" if action_mode == "EXTERNAL" else "LOCAL_ARTIFACT_CREATED"
+    save_json(artifact_path, {"task_id": task["id"], "title": task.get("title"), "execution_mode": state.get("execution_mode", "REAL"), "action_mode": action_mode, "executed_at": utc_now(), "runner": state.get("runner_engine"), "external_result": external_result, "review_result": review_result, "result": result_label})
     task["status"] = "EXECUTED"
     task["artifact"] = str(artifact_path).replace("\\", "/")
     state["status"] = "EXECUTED"
@@ -416,8 +436,17 @@ def verify_task(state, workspace):
     if not artifact_path.exists():
         raise RuntimeError(f"HALT: Expected artifact missing: {artifact_path}")
     artifact = load_json(artifact_path)
-    if artifact.get("task_id") != task.get("id") or artifact.get("result") != "EXECUTED":
+    action_mode = artifact.get("action_mode")
+    valid_result = (
+        (action_mode == "EXTERNAL" and artifact.get("result") == "EXECUTED")
+        or (action_mode == "LOCAL_ONLY" and artifact.get("result") == "LOCAL_ARTIFACT_CREATED")
+    )
+    if artifact.get("task_id") != task.get("id") or not valid_result:
         raise RuntimeError("HALT: Artifact verification failed")
+    if action_mode == "LOCAL_ONLY" and task.get("external_action") not in {None, "LOCAL_ONLY"}:
+        raise RuntimeError("HALT: Local artifact does not match the approved action")
+    if action_mode == "EXTERNAL" and task.get("external_action") not in {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}:
+        raise RuntimeError("HALT: External artifact does not match the approved action")
     if task.get("external_action") == "GITHUB_PROOF_BRANCH":
         external = artifact.get("external_result") or {}
         if external.get("action") != "GITHUB_PROOF_BRANCH" or external.get("verified") is not True:
@@ -491,7 +520,18 @@ def continue_execution(state, workspace, max_attempts=3):
             task["status"] = "NOW"
             return False
         artifact = load_json(artifact_path)
-        valid = artifact.get("task_id") == task.get("id") and artifact.get("result") == "EXECUTED"
+        action_mode = artifact.get("action_mode")
+        valid_result = (
+            (action_mode == "EXTERNAL" and artifact.get("result") == "EXECUTED")
+            or (action_mode == "LOCAL_ONLY" and artifact.get("result") == "LOCAL_ARTIFACT_CREATED")
+        )
+        valid = artifact.get("task_id") == task.get("id") and valid_result
+        if action_mode == "LOCAL_ONLY":
+            valid = valid and task.get("external_action") in {None, "LOCAL_ONLY"}
+        elif action_mode == "EXTERNAL":
+            valid = valid and task.get("external_action") in {"GITHUB_PROOF_BRANCH", "GITHUB_TARGET_TEXT_FILE"}
+        else:
+            valid = False
         if task.get("external_action") == "GITHUB_PROOF_BRANCH":
             external = artifact.get("external_result") or {}
             valid = valid and external.get("action") == "GITHUB_PROOF_BRANCH" and external.get("verified") is True
