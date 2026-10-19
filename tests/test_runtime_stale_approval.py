@@ -51,7 +51,10 @@ def test_old_proposal_refresh_does_not_approve_a_new_proposal(monkeypatch):
     body = response.get_json()
     assert body["stale_proposal"] is True
     assert "hiçbir tarama başlatılmadı" in body["error"].lower()
-    assert saved == []
+    # Local cache may be refreshed from the canonical snapshot, but no Drive
+    # write or workspace scan may be triggered by the stale approval click.
+    assert len(saved) == 1
+    assert saved[0]["result"] == old_state
     assert writes == []
 
 
