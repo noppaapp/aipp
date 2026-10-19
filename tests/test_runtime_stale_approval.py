@@ -85,7 +85,7 @@ def test_recover_stale_approved_action_revokes_old_approval_and_requires_new_id(
     monkeypatch.setattr(runtime_service, "read_session_state", lambda *_: stale)
     monkeypatch.setattr(runtime_service, "_load_session_state", lambda: {"result": stale})
     monkeypatch.setattr(runtime_service, "_save_session_state", lambda value: saved.append(value))
-    monkeypatch.setattr(runtime_service, "write_session_state", lambda *args: drive_writes.append(args[-1]))
+    monkeypatch.setattr(runtime_service, "write_session_state", lambda *args: drive_writes.append(json.loads(json.dumps(args[-1]))))
     monkeypatch.setattr(
         runtime_service, "_run_aipp",
         lambda *args, **kwargs: (0, fresh, json.dumps(fresh), ""),
@@ -133,7 +133,7 @@ def test_failed_recovery_keeps_old_approval_revoked_in_canonical_state(monkeypat
     monkeypatch.setattr(runtime_service, "read_session_state", lambda *_: stale)
     monkeypatch.setattr(runtime_service, "_load_session_state", lambda: {"result": stale})
     monkeypatch.setattr(runtime_service, "_save_session_state", lambda value: saved.append(value))
-    monkeypatch.setattr(runtime_service, "write_session_state", lambda *args: drive_writes.append(args[-1]))
+    monkeypatch.setattr(runtime_service, "write_session_state", lambda *args: drive_writes.append(json.loads(json.dumps(args[-1]))))
     monkeypatch.setattr(
         runtime_service, "_run_aipp",
         lambda *args, **kwargs: (1, None, "", "Drive scan failed"),
