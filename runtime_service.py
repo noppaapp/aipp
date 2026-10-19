@@ -514,6 +514,13 @@ def run():
             recovery_state = json.loads(json.dumps(current))
             recovery_lifecycle = recovery_state.setdefault("task_lifecycle", {})
             recovery_lifecycle["NOW"] = None
+            # The revoked task must not remain visible in FUTURE while recovery
+            # is running. Otherwise the panel can render it as a fresh proposal
+            # before the recovery operation has finished.
+            recovery_lifecycle["FUTURE"] = [
+                item for item in recovery_lifecycle.get("FUTURE", [])
+                if not isinstance(item, dict) or str(item.get("id") or "") != old_id
+            ]
             recovery_lifecycle.setdefault("REFERENCE", []).append(stale)
             recovery_state["status"] = "RECOVERY_IN_PROGRESS"
             recovery_state["recovery_job"] = {
