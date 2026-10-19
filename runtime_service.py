@@ -21,7 +21,7 @@ from aipp_drive_runtime import (
     discover_task_candidates,
     get_credentials,
 )
-from project_intelligence import analyze_documents
+from project_intelligence import analyze_documents, build_boot_version_update_proposal
 from project_intelligence_ai import analyze_with_ai
 
 app = Flask(__name__)
@@ -217,6 +217,18 @@ def _drive_context(include_ai=True):
         intelligence["proposals"].sort(key=lambda p: (str(p.get("finding_type", "")), str(p.get("target", "")), str(p.get("action", ""))))
     else:
         intelligence["semantic"] = {"enabled": False, "available": False, "reason": "status endpoint does not run AI"}
+
+    # Create a passive proposal only when the canonical protocol confirms v1.1.1
+    # and PROJECT_BOOT has exactly one v1.0 marker.
+    protocol_text = next((doc.get("text", "") for doc in documents if doc.get("name") == "AIPP.md"), "")
+    boot_proposal = build_boot_version_update_proposal(boot_text, boot_info.get("id"), protocol_text)
+    if boot_proposal:
+        intelligence["findings"].append({
+            "type": "boot_version_mismatch",
+            "file_name": "PROJECT_BOOT.md",
+            "evidence": boot_proposal["evidence"],
+        })
+        intelligence["proposals"].append(boot_proposal)
     return boot_text, authority_text, candidates, intelligence
 
 
