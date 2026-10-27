@@ -157,6 +157,8 @@ def analyze_with_ai(documents):
     try:
         enabled = {
             "gemini": bool(os.environ.get("GEMINI_API_KEY")),
+            "groq": bool(os.environ.get("GROQ_API_KEY")),
+            "openrouter": bool(os.environ.get("OPENROUTER_API_KEY")),
             "claude": bool(os.environ.get("ANTHROPIC_API_KEY")),
         }
         registry = tuple(model for model in DEFAULT_MODELS if enabled.get(model.provider, False))
