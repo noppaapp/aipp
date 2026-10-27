@@ -11,17 +11,19 @@ class ModelSpec:
     enabled: bool = True
 
 
-class RoutingError(RuntimeError):
-    pass
-
-
 DEFAULT_MODELS = (
-    # Semantic workspace analysis is intentionally Flash-first: it is the
-    # high-volume pass. Pro and Claude remain fallbacks for harder/failed calls.
+    # Keep Gemini first. If both Gemini variants fail (including quota errors),
+    # try Groq, then OpenRouter, and finally Claude when configured.
     ModelSpec("gemini", "flash", frozenset({"text", "code", "reasoning", "fast"}), 100),
     ModelSpec("gemini", "pro", frozenset({"text", "code", "reasoning"}), 90),
-    ModelSpec("claude", "sonnet", frozenset({"text", "code", "reasoning"}), 80),
+    ModelSpec("groq", "openai/gpt-oss-120b", frozenset({"text", "code", "reasoning", "fast"}), 85),
+    ModelSpec("openrouter", "openrouter/free", frozenset({"text", "code", "reasoning", "fast"}), 80),
+    ModelSpec("claude", "sonnet", frozenset({"text", "code", "reasoning"}), 70),
 )
+
+
+class RoutingError(RuntimeError):
+    pass
 
 
 def route(required_capabilities: Iterable[str], registry=DEFAULT_MODELS) -> ModelSpec:

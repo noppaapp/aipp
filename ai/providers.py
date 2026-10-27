@@ -5,7 +5,7 @@ the runtime explicitly enables semantic analysis and a matching key exists.
 """
 import json
 import os
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -25,11 +25,44 @@ def _post_json(url, headers, payload, timeout=90):
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        # Provider response details are useful for quota fallback telemetry,
+        # but never include request headers or API keys.
         raise ProviderError(f"AI provider HTTP {exc.code}: {detail[:1000]}") from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        # Convert transport failures to ProviderError so the router can try
+        # the next configured provider instead of aborting the whole scan.
+        raise ProviderError(f"AI provider request failed: {type(exc).__name__}") from exc
 
 
 def _task_prompt(task):
     return str(task.get("prompt") or task.get("description") or task.get("input") or "")
+
+
+def _openai_compatible_execute(api_key, base_url, model_name, task, extra_headers=None):
+    if not api_key:
+        raise ProviderError("AI provider API key is missing")
+    payload = {
+        "model": model_name,
+        "messages": [],
+        "temperature": 0.1,
+        "max_tokens": int(task.get("max_output_tokens", 4096)),
+    }
+    system = str(task.get("system") or "")
+    if system:
+        payload["messages"].append({"role": "system", "content": system})
+    payload["messages"].append({"role": "user", "content": _task_prompt(task)})
+    if task.get("json_output"):
+        payload["response_format"] = {"type": "json_object"}
+    headers = {"Authorization": f"Bearer {api_key}"}
+    headers.update(extra_headers or {})
+    result = _post_json(base_url.rstrip("/") + "/chat/completions", headers, payload)
+    try:
+        text = result["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ProviderError("AI provider response did not contain message text") from exc
+    if not isinstance(text, str) or not text.strip():
+        raise ProviderError("AI provider returned empty message text")
+    return json.loads(text) if task.get("json_output") else text
 
 
 class GeminiAdapter:
@@ -44,7 +77,7 @@ class GeminiAdapter:
         model_name = os.environ.get("AIPP_GEMINI_PRO_MODEL" if model.model == "pro" else "AIPP_GEMINI_FLASH_MODEL")
         model_name = model_name or {
             "pro": "gemini-3.1-pro-preview",
-            "flash": "gemini-3.7-flash",
+            "flash": "gemini-3.8-flash",
         }.get(model.model, model.model)
         payload = {
             "systemInstruction": {"parts": [{"text": str(task.get("system") or "")}]},
@@ -77,7 +110,7 @@ class ClaudeAdapter:
 
     def execute(self, model, task):
         model_name = os.environ.get("AIPP_CLAUDE_MODEL") or (
-            "claude-sonnet-5" if model.model == "sonnet" else model.model
+            "claude-sonnet-5-5" if model.model == "sonnet" else model.model
         )
         payload = {
             "model": model_name,
@@ -106,9 +139,53 @@ class ClaudeAdapter:
         return json.loads(text) if task.get("json_output") else text
 
 
+class GroqAdapter:
+    """OpenAI-compatible adapter for Groq's hosted inference API."""
+
+    def __init__(self, api_key=None):
+        self.api_key = api_key or os.environ.get("GROQ_API_KEY", "").strip()
+        if not self.api_key:
+            raise ProviderError("GROQ_API_KEY is missing")
+
+    def execute(self, model, task):
+        model_name = os.environ.get("AIPP_GROQ_MODEL") or model.model
+        return _openai_compatible_execute(
+            self.api_key,
+            os.environ.get("AIPP_GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
+            model_name,
+            task,
+        )
+
+
+class OpenRouterAdapter:
+    """OpenAI-compatible adapter for OpenRouter model routing."""
+
+    def __init__(self, api_key=None):
+        self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "").strip()
+        if not self.api_key:
+            raise ProviderError("OPENROUTER_API_KEY is missing")
+
+    def execute(self, model, task):
+        model_name = os.environ.get("AIPP_OPENROUTER_MODEL") or model.model
+        return _openai_compatible_execute(
+            self.api_key,
+            os.environ.get("AIPP_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+            model_name,
+            task,
+            extra_headers={
+                "HTTP-Referer": os.environ.get("AIPP_OPENROUTER_SITE_URL", "https://aipp-control-panel.onrender.com"),
+                "X-Title": "AIPP",
+            },
+        )
+
+
 def configured_adapter(provider):
     if provider == "gemini":
         return GeminiAdapter()
+    if provider == "groq":
+        return GroqAdapter()
+    if provider == "openrouter":
+        return OpenRouterAdapter()
     if provider == "claude":
         return ClaudeAdapter()
     raise ProviderError(f"Unsupported AI provider: {provider}")
