@@ -12,8 +12,16 @@ def test_panel_delegates_commands_to_runtime_without_disk_state(monkeypatch, tmp
             "task_lifecycle": {"FUTURE": []},
         }
 
+    class ImmediateThread:
+        def __init__(self, target, args, daemon):
+            self.target, self.args = target, args
+        def start(self):
+            self.target(*self.args)
+
+    monkeypatch.setattr(panel_server, "threading.Thread", ImmediateThread)
     monkeypatch.setattr(panel_server, "runtime_request", fake_runtime_request)
     monkeypatch.setattr(panel_server, "PANEL_TOKEN", "test-panel-token")
+    panel_server.JOBS.clear()
 
     client = panel_server.app.test_client()
     response = client.post(
@@ -22,8 +30,11 @@ def test_panel_delegates_commands_to_runtime_without_disk_state(monkeypatch, tmp
         json={"command": "BAŞLA"},
     )
 
-    assert response.status_code == 200
-    assert response.get_json()["status"] == "PROPOSAL_READY"
+    assert response.status_code == 202
+    job_id = response.get_json()["job_id"]
+    status = client.get(f"/api/jobs/{job_id}", headers={"X-AIPP-Panel-Token": "test-panel-token"})
+    assert status.status_code == 200
+    assert status.get_json()["data"]["status"] == "PROPOSAL_READY"
     assert calls == [
         (
             "/api/run",
@@ -41,8 +52,16 @@ def test_panel_forwards_force_refresh_flag(monkeypatch):
         calls.append((path, method, payload))
         return {"ok": True, "status": "PROPOSAL_READY"}
 
+    class ImmediateThread:
+        def __init__(self, target, args, daemon):
+            self.target, self.args = target, args
+        def start(self):
+            self.target(*self.args)
+
+    monkeypatch.setattr(panel_server, "threading.Thread", ImmediateThread)
     monkeypatch.setattr(panel_server, "runtime_request", fake_runtime_request)
     monkeypatch.setattr(panel_server, "PANEL_TOKEN", "test-panel-token")
+    panel_server.JOBS.clear()
 
     client = panel_server.app.test_client()
     response = client.post(
@@ -51,7 +70,7 @@ def test_panel_forwards_force_refresh_flag(monkeypatch):
         json={"command": "BAŞLA", "force_refresh": True},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert calls[0][2]["force_refresh"] is True
 
 
