@@ -63,3 +63,15 @@ def test_router_order_keeps_gemini_primary_then_groq_openrouter_and_claude():
     ordered = [model.provider for model in sorted(DEFAULT_MODELS, key=lambda item: item.priority, reverse=True)]
     assert ordered == ["gemini", "gemini", "groq", "openrouter", "claude"]
     assert route({"text", "reasoning"}).provider == "gemini"
+
+
+
+def test_transport_error_becomes_provider_error_for_fallback(monkeypatch):
+    from urllib.error import URLError
+
+    def fail_request(*args, **kwargs):
+        raise URLError("connection timed out")
+
+    monkeypatch.setattr(providers, "urlopen", fail_request)
+    with pytest.raises(providers.ProviderError, match="request failed"):
+        providers._post_json("https://provider.invalid/chat/completions", {}, {})
