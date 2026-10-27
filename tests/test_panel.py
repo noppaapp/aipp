@@ -18,7 +18,7 @@ def test_panel_delegates_commands_to_runtime_without_disk_state(monkeypatch, tmp
         def start(self):
             self.target(*self.args)
 
-    monkeypatch.setattr(panel_server, "threading.Thread", ImmediateThread)
+    monkeypatch.setattr(panel_server.threading, "Thread", ImmediateThread)
     monkeypatch.setattr(panel_server, "runtime_request", fake_runtime_request)
     monkeypatch.setattr(panel_server, "PANEL_TOKEN", "test-panel-token")
     panel_server.JOBS.clear()
