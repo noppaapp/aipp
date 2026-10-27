@@ -75,3 +75,55 @@ def test_transport_error_becomes_provider_error_for_fallback(monkeypatch):
     monkeypatch.setattr(providers, "urlopen", fail_request)
     with pytest.raises(providers.ProviderError, match="request failed"):
         providers._post_json("https://provider.invalid/chat/completions", {}, {})
+
+
+
+def test_semantic_analysis_falls_back_when_gemini_quota_is_exhausted(monkeypatch):
+    import project_intelligence_ai as semantic
+
+    monkeypatch.setenv("AIPP_SEMANTIC_ANALYSIS", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    calls = []
+
+    class FakeAdapter:
+        def __init__(self, provider):
+            self.provider = provider
+
+        def execute(self, model, task):
+            calls.append((self.provider, model.model))
+            if self.provider == "gemini":
+                raise providers.ProviderError("quota exhausted")
+            return {
+                "findings": [{
+                    "type": "observation",
+                    "claim": "Kaynak metin doğrulandı.",
+                    "evidence": [{
+                        "file_name": "notes.md",
+                        "quote": "Source line exact.",
+                    }],
+                }],
+                "proposals": [],
+            }
+
+    monkeypatch.setattr(
+        semantic,
+        "configured_adapter",
+        lambda provider: FakeAdapter(provider),
+    )
+
+    result = semantic.analyze_with_ai([
+        {"name": "notes.md", "text": "Source line exact."},
+    ])
+
+    assert result["available"] is True
+    assert result["provider"] == "groq"
+    assert result["findings"][0]["evidence"][0]["quote"] == "Source line exact."
+    assert calls[:3] == [
+        ("gemini", "flash"),
+        ("gemini", "pro"),
+        ("groq", "openai/gpt-oss-120b"),
+    ]
+    assert all(provider in {"gemini", "groq"} for provider, _ in calls)
