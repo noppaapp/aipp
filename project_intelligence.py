@@ -52,11 +52,14 @@ def _tokens(text):
     return set(TOKEN_RE.findall((text or "").lower()))
 
 
-def _similarity(a, b):
-    left, right = _tokens(a), _tokens(b)
+def _similarity_from_tokens(left, right):
     if not left or not right:
         return 0.0
     return len(left & right) / len(left | right)
+
+
+def _similarity(a, b):
+    return _similarity_from_tokens(_tokens(a), _tokens(b))
 
 def _content_differences(left_text, right_text, limit=4):
     """Return a small, evidence-friendly set of meaningful content differences."""
@@ -177,6 +180,10 @@ def analyze_documents(documents):
         doc["kind"] = _kind(doc["name"], text)
         doc["text_length"] = len(text)
         doc["task_records"] = _task_records(doc)
+        # Tokenize each document once. Re-tokenizing both full PDF texts for
+        # every document pair made a 100+ file Drive review exceed the runtime
+        # request limit. Keep the same Jaccard comparison, but reuse its sets.
+        doc["_similarity_tokens"] = _tokens(text)
         docs.append(doc)
 
     task_index = defaultdict(list)
@@ -235,7 +242,9 @@ def analyze_documents(documents):
         for right in docs[i + 1:]:
             if left["kind"] == "protocol" or right["kind"] == "protocol":
                 continue
-            similarity = _similarity(left.get("text"), right.get("text"))
+            similarity = _similarity_from_tokens(
+                left["_similarity_tokens"], right["_similarity_tokens"]
+            )
             if similarity >= 0.92 and left["name"] != right["name"]:
                 differences = _content_differences(left.get("text"), right.get("text"))
                 evidence = [
