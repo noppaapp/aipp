@@ -5,6 +5,7 @@ import zipfile
 import base64
 import copy
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -39,7 +40,7 @@ def _request(url, method="GET", data=None, token=None, content_type=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     if content_type:
         headers["Content-Type"] = content_type
-    with urlopen(Request(url, data=data, headers=headers, method=method), timeout=20) as response:
+    with urlopen(Request(url, data=data, headers=headers, method=method), timeout=12) as response:
         return response.read()
 
 
@@ -332,7 +333,12 @@ def discover_task_candidates(token, folder_id, include_documents=False):
     documents = []
     scanned_items = []
     mime_counts = {}
-    for file_info in files:
+    # Read documents concurrently so a large Drive workspace does not consume
+    # the runtime's entire request budget on sequential network downloads.
+    # executor.map preserves file order, keeping candidate and evidence output deterministic.
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        file_texts = list(pool.map(lambda item: read_file_text(token, item), files))
+    for file_info, text in zip(files, file_texts):
         mime = file_info.get("mimeType", "")
         mime_counts[mime] = mime_counts.get(mime, 0) + 1
         if mime == FOLDER_MIME:
