@@ -246,11 +246,21 @@ def _download_binary(token, file_id):
 
 
 def _read_pdf(raw):
-    if PdfReader is None:
+    # Avoid letting unusually large or complex PDFs exhaust the small runtime.
+    if PdfReader is None or len(raw) > 8 * 1024 * 1024:
         return None
     try:
-        reader = PdfReader(io.BytesIO(raw))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
+        reader = PdfReader(io.BytesIO(raw), strict=False)
+        if len(reader.pages) > 40:
+            return None
+        chunks = []
+        for page in reader.pages:
+            try:
+                page_text = page.extract_text() or ""
+            except Exception:
+                continue
+            chunks.append(page_text[:100_000])
+        return "\n".join(chunks)[:1_000_000]
     except Exception:
         return None
 
@@ -293,9 +303,13 @@ def read_file_text(token, file_info):
         except (HTTPError, URLError, TimeoutError, UnicodeDecodeError):
             return None
     if mime == PDF_MIME:
+        # Skip oversized PDFs before downloading them into the limited runtime.
         try:
-            return _read_pdf(_download_binary(token, file_info["id"]))
-        except HTTPError:
+            declared_size = int(file_info.get("size") or 0)
+            if declared_size > 8 * 1024 * 1024:
+                return None
+            return _read_pdf(_download_binary(token, file_id))
+        except (HTTPError, URLError, TimeoutError, ValueError):
             return None
     if mime == ZIP_MIME:
         try:
@@ -333,10 +347,9 @@ def discover_task_candidates(token, folder_id, include_documents=False):
     documents = []
     scanned_items = []
     mime_counts = {}
-    # Read documents concurrently so a large Drive workspace does not consume
-    # the runtime's entire request budget on sequential network downloads.
+    # Keep concurrency low because PDF parsing is memory-intensive on the free runtime.
     # executor.map preserves file order, keeping candidate and evidence output deterministic.
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         file_texts = list(pool.map(lambda item: read_file_text(token, item), files))
     for file_info, text in zip(files, file_texts):
         mime = file_info.get("mimeType", "")
@@ -344,7 +357,8 @@ def discover_task_candidates(token, folder_id, include_documents=False):
         if mime == FOLDER_MIME:
             continue
         scanned_files += 1
-        text = read_file_text(token, file_info)
+        # Reuse the already-read result; reading here a second time doubled downloads
+        # and PDF parsing, which could exhaust memory on the runtime.
         readable_flag = text is not None
         if readable_flag:
             readable += 1
