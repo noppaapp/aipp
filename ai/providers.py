@@ -5,7 +5,7 @@ the runtime explicitly enables semantic analysis and a matching key exists.
 """
 import json
 import os
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -28,6 +28,10 @@ def _post_json(url, headers, payload, timeout=90):
         # Provider response details are useful for quota fallback telemetry,
         # but never include request headers or API keys.
         raise ProviderError(f"AI provider HTTP {exc.code}: {detail[:1000]}") from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        # Convert transport failures to ProviderError so the router can try
+        # the next configured provider instead of aborting the whole scan.
+        raise ProviderError(f"AI provider request failed: {type(exc).__name__}") from exc
 
 
 def _task_prompt(task):
