@@ -16,7 +16,7 @@ DEFAULT_MODELS = (
     # try Groq, then OpenRouter, and finally Claude when configured.
     ModelSpec("gemini", "flash", frozenset({"text", "code", "reasoning", "fast"}), 100),
     ModelSpec("gemini", "pro", frozenset({"text", "code", "reasoning"}), 90),
-    ModelSpec("groq", "llama-3.3-70b-versatile", frozenset({"text", "code", "reasoning", "fast"}), 85),
+    ModelSpec("groq", "openai/gpt-oss-120b", frozenset({"text", "code", "reasoning", "fast"}), 85),
     ModelSpec("openrouter", "openrouter/free", frozenset({"text", "code", "reasoning", "fast"}), 80),
     ModelSpec("claude", "sonnet", frozenset({"text", "code", "reasoning"}), 70),
 )
