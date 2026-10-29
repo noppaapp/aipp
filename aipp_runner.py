@@ -91,13 +91,19 @@ def load_discovered_tasks():
 
 
 def load_project_intelligence():
-    encoded = os.environ.get(PROJECT_INTELLIGENCE_ENV, "").strip()
-    if not encoded:
-        return {"version": "0", "findings": [], "proposals": []}
-    try:
-        value = json.loads(base64.b64decode(encoded).decode("utf-8"))
-    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("HALT: Project intelligence transport is invalid") from exc
+    if os.environ.get("AIPP_PROJECT_INTELLIGENCE_STDIN", "").strip() == "1":
+        try:
+            value = json.loads(sys.stdin.read())
+        except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("HALT: Project intelligence stdin transport is invalid") from exc
+    else:
+        encoded = os.environ.get(PROJECT_INTELLIGENCE_ENV, "").strip()
+        if not encoded:
+            return {"version": "0", "findings": [], "proposals": []}
+        try:
+            value = json.loads(base64.b64decode(encoded).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("HALT: Project intelligence transport is invalid") from exc
     if not isinstance(value, dict):
         raise RuntimeError("HALT: Project intelligence transport must be an object")
     return value

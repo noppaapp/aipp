@@ -140,3 +140,18 @@ def test_verification_always_requires_human_completion_authority(tmp_path, monke
     assert result["task_lifecycle"]["COMPLETED"] == []
     assert result["authority_gate"]["pending_completion"] == "TASK-01"
     assert result["authority_gate"]["last_action"] == "VERIFICATION_PASSED_AWAITING_COMPLETION_AUTHORITY"
+
+def test_project_intelligence_loads_large_payload_from_stdin(monkeypatch):
+    import io
+    import aipp_runner
+
+    payload = {
+        "version": "2",
+        "findings": [{"type": "near_duplicate", "evidence": [{"quote": "x" * 200000}]}],
+        "proposals": [],
+    }
+    monkeypatch.setenv("AIPP_PROJECT_INTELLIGENCE_STDIN", "1")
+    monkeypatch.delenv("AIPP_PROJECT_INTELLIGENCE_B64", raising=False)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+
+    assert aipp_runner.load_project_intelligence() == payload

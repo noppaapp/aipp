@@ -308,9 +308,12 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persist
     env["AIPP_DISCOVERED_TASKS_B64"] = base64.b64encode(
         json.dumps(candidates, ensure_ascii=False).encode()
     ).decode()
-    env["AIPP_PROJECT_INTELLIGENCE_B64"] = base64.b64encode(
-        json.dumps(intelligence, ensure_ascii=False).encode()
-    ).decode()
+    # Large workspace intelligence can exceed the OS per-environment-string
+    # limit when base64-encoded. Send it over stdin instead; this keeps the
+    # transport ephemeral and avoids ARG_MAX failures on large Drive scans.
+    env.pop("AIPP_PROJECT_INTELLIGENCE_B64", None)
+    env["AIPP_PROJECT_INTELLIGENCE_STDIN"] = "1"
+    intelligence_input = json.dumps(intelligence, ensure_ascii=False)
     # Carry the persisted runtime state into the runner so every command
     # continues the same session instead of rebuilding from an empty state.
     if session_state:
@@ -334,6 +337,7 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persist
         cmd,
         cwd=ROOT,
         env=env,
+        input=intelligence_input,
         capture_output=True,
         text=True,
         timeout=300,
