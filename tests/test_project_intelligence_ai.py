@@ -58,3 +58,29 @@ def test_malformed_ai_output_fails_closed(monkeypatch):
     assert result["enabled"] is True
     assert result["available"] is False
     assert result["reason"].startswith("semantic analysis unavailable:")
+
+
+def test_provider_timeout_falls_back_without_aborting_scan(monkeypatch):
+    monkeypatch.setenv("AIPP_SEMANTIC_ANALYSIS", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    class Model:
+        provider = "gemini"
+        model = "test-model"
+        priority = 1
+
+    class Adapter:
+        def execute(self, model_spec, task):
+            raise TimeoutError("provider timed out")
+
+    monkeypatch.setattr(module, "DEFAULT_MODELS", (Model(),))
+    monkeypatch.setattr(module, "configured_adapter", lambda provider: Adapter())
+
+    result = module.analyze_with_ai([{"name": "ideas.md", "text": "Next step: verify."}])
+
+    assert result["enabled"] is True
+    assert result["available"] is False
+    assert "TimeoutError" in result["reason"]
