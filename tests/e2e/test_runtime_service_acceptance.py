@@ -1,6 +1,7 @@
 """Acceptance tests for runtime_service against an in-memory Drive."""
 import base64
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,7 @@ def service(tmp_path, monkeypatch):
     monkeypatch.setenv("AIPP_RUNTIME_TOKEN", "test-runtime-token")
     monkeypatch.delenv("AIPP_AUTHORITY_PUBKEY", raising=False)
     monkeypatch.setattr(runtime_service, "SESSION_STATE_PATH", tmp_path / "session.json")
+    runtime_service.RUNTIME_JOBS.clear()
     monkeypatch.setattr(runtime_service, "analyze_with_ai",
                         lambda docs: {"enabled": False, "available": False, "proposals": [], "findings": []})
     had_artifacts = (ROOT / "artifacts").exists()
@@ -44,8 +46,23 @@ def call(client, command, task=None):
     body = {"command": command}
     if task:
         body["task"] = task
-    response = client.post("/api/run", json=body, headers={"X-AIPP-Runtime-Token": "test-runtime-token"})
-    return response.status_code, response.get_json()
+    headers = {"X-AIPP-Runtime-Token": "test-runtime-token"}
+    response = client.post("/api/run", json=body, headers=headers)
+    data = response.get_json()
+    if command == "BAŞLA" and response.status_code == 202 and data.get("job_id"):
+        for _ in range(500):
+            time.sleep(0.01)
+            poll = client.get(f"/api/jobs/{data['job_id']}", headers=headers)
+            state = poll.get_json()
+            if poll.status_code != 200:
+                return poll.status_code, state
+            if state.get("status") == "RUNNING":
+                continue
+            if state.get("status") == "COMPLETED":
+                return 200, state.get("data")
+            return 500, state
+        raise AssertionError("Background workspace scan did not finish in test time.")
+    return response.status_code, data
 
 def test_full_cycle_against_fake_drive(service):
     client, drive = service
