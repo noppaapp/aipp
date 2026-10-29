@@ -58,7 +58,7 @@ def test_panel_forwards_force_refresh_flag(monkeypatch):
         def start(self):
             self.target(*self.args)
 
-    monkeypatch.setattr(panel_server, "threading.Thread", ImmediateThread)
+    monkeypatch.setattr(panel_server.threading, "Thread", ImmediateThread)
     monkeypatch.setattr(panel_server, "runtime_request", fake_runtime_request)
     monkeypatch.setattr(panel_server, "PANEL_TOKEN", "test-panel-token")
     panel_server.JOBS.clear()
