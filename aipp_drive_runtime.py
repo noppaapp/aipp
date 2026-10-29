@@ -5,7 +5,7 @@ import zipfile
 import base64
 import copy
 import json
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -348,9 +348,22 @@ def discover_task_candidates(token, folder_id, include_documents=False):
     scanned_items = []
     mime_counts = {}
     # Keep concurrency low because PDF parsing is memory-intensive on the free runtime.
-    # executor.map preserves file order, keeping candidate and evidence output deterministic.
+    # Report progress as reads finish, while preserving deterministic file order.
+    file_texts = [None] * len(files)
+    total_documents = sum(1 for item in files if item.get("mimeType") != FOLDER_MIME)
+    completed_documents = 0
     with ThreadPoolExecutor(max_workers=2) as pool:
-        file_texts = list(pool.map(lambda item: read_file_text(token, item), files))
+        futures = {pool.submit(read_file_text, token, item): (index, item) for index, item in enumerate(files)}
+        for future in as_completed(futures):
+            index, item = futures[future]
+            try:
+                file_texts[index] = future.result()
+            except Exception as exc:
+                print(f"DRIVE_FILE_READ_ERROR name={item.get('name', '')!r} type={type(exc).__name__} message={str(exc)[:200]}", flush=True)
+                file_texts[index] = None
+            if item.get("mimeType") != FOLDER_MIME:
+                completed_documents += 1
+                print(f"DRIVE_READ_PROGRESS completed={completed_documents} total={total_documents} name={item.get('name', '')!r} readable={file_texts[index] is not None}", flush=True)
     for file_info, text in zip(files, file_texts):
         mime = file_info.get("mimeType", "")
         mime_counts[mime] = mime_counts.get(mime, 0) + 1
