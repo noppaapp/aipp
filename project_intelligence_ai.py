@@ -247,28 +247,68 @@ def analyze_with_ai(documents):
             "Return only the required JSON.\n\n"
             + synthesis_material
         )
-        final_result = run_model(synthesis_prompt)
-        final_validated = _validate(final_result.output, documents)
-        _telemetry(
-            enabled=True,
-            available=True,
-            provider=final_result.provider,
-            model=final_result.model,
-            batches=len(chunks),
-            documents=len(documents),
-            findings=len(final_validated["findings"]),
-            proposals=len(final_validated["proposals"]),
-        )
-        return {
-            "enabled": True,
-            "available": True,
-            "provider": final_result.provider,
-            "model": final_result.model,
-            "batches": len(chunks),
-            "documents": len(documents),
-            "findings": final_validated["findings"],
-            "proposals": final_validated["proposals"],
-        }
+        try:
+            final_result = run_model(synthesis_prompt)
+            final_validated = _validate(final_result.output, documents)
+            _telemetry(
+                enabled=True,
+                available=True,
+                provider=final_result.provider,
+                model=final_result.model,
+                batches=len(chunks),
+                documents=len(documents),
+                findings=len(final_validated["findings"]),
+                proposals=len(final_validated["proposals"]),
+            )
+            return {
+                "enabled": True,
+                "available": True,
+                "provider": final_result.provider,
+                "model": final_result.model,
+                "batches": len(chunks),
+                "documents": len(documents),
+                "findings": final_validated["findings"],
+                "proposals": final_validated["proposals"],
+            }
+        except (ProviderError, ValueError, TypeError, KeyError, IndexError) as synthesis_error:
+            # The batch calls may have succeeded even when the final synthesis
+            # call times out or every remaining provider fails. Preserve those
+            # evidence-validated results instead of discarding all AI work.
+            merged = {"findings": [], "proposals": []}
+            seen = {"findings": set(), "proposals": set()}
+            for partial in partials:
+                for key in ("findings", "proposals"):
+                    for item in partial.get(key, []):
+                        fingerprint = json.dumps(item, sort_keys=True, ensure_ascii=False)
+                        if fingerprint not in seen[key]:
+                            seen[key].add(fingerprint)
+                            merged[key].append(item)
+            if partials:
+                _telemetry(
+                    enabled=True,
+                    available=True,
+                    provider="PARTIAL_BATCH_MERGE",
+                    model="validated-batch-results",
+                    synthesis="unavailable",
+                    batches=len(partials),
+                    expected_batches=len(chunks),
+                    documents=len(documents),
+                    findings=len(merged["findings"]),
+                    proposals=len(merged["proposals"]),
+                    warning=str(synthesis_error)[:240],
+                )
+                return {
+                    "enabled": True,
+                    "available": True,
+                    "provider": "PARTIAL_BATCH_MERGE",
+                    "model": "validated-batch-results",
+                    "batches": len(partials),
+                    "documents": len(documents),
+                    "findings": merged["findings"],
+                    "proposals": merged["proposals"],
+                    "synthesis_warning": str(synthesis_error)[:500],
+                }
+            raise
     except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
         _telemetry(
             enabled=True,
