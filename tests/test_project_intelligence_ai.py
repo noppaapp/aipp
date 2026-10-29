@@ -184,3 +184,53 @@ def test_later_batch_failure_preserves_prior_results_and_marks_analysis_incomple
     assert result["failed_batches"] == [2]
     assert result["findings"][0]["claim"] == "İlk grup doğrulandı."
     assert result["findings"][0]["evidence"][0]["quote"] == "Next step: verify this source."
+
+
+def test_alternate_model_from_same_provider_is_tried_after_model_failure(monkeypatch):
+    monkeypatch.setenv("AIPP_SEMANTIC_ANALYSIS", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    class Model:
+        def __init__(self, model, priority):
+            self.provider = "gemini"
+            self.model = model
+            self.priority = priority
+
+    class Adapter:
+        calls = []
+
+        def execute(self, model_spec, task):
+            self.calls.append(model_spec.model)
+            if model_spec.model == "flash":
+                raise module.ProviderError("model temporarily unavailable")
+            return {
+                "findings": [{
+                    "type": "verified_observation",
+                    "claim": "Kaynak metin doğrulandı.",
+                    "evidence": [{
+                        "file_name": "ideas.md",
+                        "quote": "Next step: verify this source.",
+                    }],
+                }],
+                "proposals": [],
+            }
+
+    adapter = Adapter()
+    monkeypatch.setattr(
+        module, "DEFAULT_MODELS",
+        (Model("flash", 100), Model("pro", 90)),
+    )
+    monkeypatch.setattr(module, "configured_adapter", lambda provider: adapter)
+
+    result = module.analyze_with_ai([{
+        "name": "ideas.md",
+        "text": "Next step: verify this source.",
+    }])
+
+    assert result["status"] == "COMPLETE"
+    assert result["complete"] is True
+    assert result["findings"][0]["claim"] == "Kaynak metin doğrulandı."
+    assert adapter.calls == ["flash", "pro", "pro"]
