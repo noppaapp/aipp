@@ -144,16 +144,34 @@ def _telemetry(**fields):
 
 
 def analyze_with_ai(documents):
-    """Return validated holistic AI proposals, or an explicit unavailable result."""
+    """Analyze all chunks while preserving an explicit completeness contract."""
     if os.environ.get("AIPP_SEMANTIC_ANALYSIS", "").strip().lower() not in {"1", "true", "yes", "on"}:
-        _telemetry(enabled=False, available=False, reason="semantic_analysis_disabled")
-        return {"enabled": False, "available": False, "reason": "semantic analysis disabled"}
+        _telemetry(enabled=False, available=False, status="DISABLED", reason="semantic_analysis_disabled")
+        return {"enabled": False, "available": False, "status": "DISABLED", "complete": False,
+                "reason": "semantic analysis disabled"}
     if not documents:
-        _telemetry(enabled=True, available=False, reason="no_readable_documents")
-        return {"enabled": True, "available": False, "reason": "no readable documents"}
+        _telemetry(enabled=True, available=False, status="UNAVAILABLE", reason="no_readable_documents")
+        return {"enabled": True, "available": False, "status": "UNAVAILABLE", "complete": False,
+                "reason": "no readable documents"}
 
     chunks = _document_chunks(documents)
     partials = []
+    failed_batches = []
+    batch_errors = []
+    unavailable_providers = set()
+
+    def merge_partials():
+        merged = {"findings": [], "proposals": []}
+        seen = {"findings": set(), "proposals": set()}
+        for partial in partials:
+            for key in ("findings", "proposals"):
+                for item in partial.get(key, []):
+                    fingerprint = json.dumps(item, sort_keys=True, ensure_ascii=False)
+                    if fingerprint not in seen[key]:
+                        seen[key].add(fingerprint)
+                        merged[key].append(item)
+        return merged
+
     try:
         enabled = {
             "gemini": bool(os.environ.get("GEMINI_API_KEY")),
@@ -163,15 +181,12 @@ def analyze_with_ai(documents):
         }
         registry = tuple(model for model in DEFAULT_MODELS if enabled.get(model.provider, False))
         if not registry:
-            _telemetry(enabled=True, available=False, provider="NONE", reason="no_configured_provider_key")
-            return {"enabled": True, "available": False, "reason": "No configured AI provider key"}
+            _telemetry(enabled=True, available=False, status="UNAVAILABLE",
+                       provider="NONE", reason="no_configured_provider_key")
+            return {"enabled": True, "available": False, "status": "UNAVAILABLE", "complete": False,
+                    "reason": "No configured AI provider key"}
 
         ordered = sorted(registry, key=lambda model: model.priority, reverse=True)
-
-        # A quota/rate-limit response applies to the provider, not just one
-        # model variant. Do not waste the scan budget retrying another model
-        # on the same exhausted provider.
-        unavailable_providers = set()
 
         def run_model(prompt):
             errors = []
@@ -193,27 +208,15 @@ def analyze_with_ai(documents):
                         configured_adapter(provider).execute(model_spec, task),
                     )
                     return result
-                except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
-                    detail = str(exc)
-                    errors.append(f"{provider}:{type(exc).__name__}:{detail}")
-                    # A provider failure is not a reason to retry the same provider
-                    # for every remaining document batch. Quota, access, empty
-                    # response, and model availability failures are provider-wide
-                    # for this scan; deterministic analysis must continue promptly.
-                    unavailable_providers.add(provider)
                 except Exception as exc:
-                    # Adapters may raise TimeoutError or transport-specific
-                    # exceptions that do not inherit ProviderError. Convert them
-                    # into a bounded provider failure so one flaky provider cannot
-                    # abort the entire Drive job or strand its background status.
+                    # A provider is quarantined for this scan after a transport,
+                    # quota, response-shape, or JSON failure. Other providers
+                    # remain eligible for fallback on the current and later batches.
                     detail = str(exc) or type(exc).__name__
                     errors.append(f"{provider}:{type(exc).__name__}:{detail[:240]}")
                     unavailable_providers.add(provider)
             raise ProviderError("all configured AI providers failed: " + " | ".join(errors))
 
-        # First pass: every readable Drive document is included in one or more
-        # bounded batches. Nothing is silently dropped because the workspace
-        # exceeds one model context window.
         for index, chunk in enumerate(chunks, start=1):
             prompt = (
                 f"Analyze workspace batch {index}/{len(chunks)} as evidence for one coherent project. "
@@ -222,19 +225,63 @@ def analyze_with_ai(documents):
                 "Use exact evidence quotes. Do not invent facts. Return only the required JSON.\n\n"
                 + chunk
             )
-            result = run_model(prompt)
-            batch_validated = _validate(result.output, documents)
-            partials.append({
-                "batch": index,
-                "provider": result.provider,
-                "model": result.model,
-                "findings": batch_validated["findings"],
-                "proposals": batch_validated["proposals"],
-            })
+            try:
+                result = run_model(prompt)
+                batch_validated = _validate(result.output, documents)
+                partials.append({
+                    "batch": index,
+                    "provider": result.provider,
+                    "model": result.model,
+                    "findings": batch_validated["findings"],
+                    "proposals": batch_validated["proposals"],
+                })
+            except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
+                failed_batches.append(index)
+                batch_errors.append(f"batch={index}:{type(exc).__name__}:{str(exc)[:240]}")
+                # If every configured provider is unavailable, later batches
+                # cannot succeed in this scan. Mark them explicitly as unprocessed.
+                if len(unavailable_providers) >= len(ordered):
+                    break
 
-        # Second pass: synthesize the evidence from every batch into one
-        # project-level result. The final model sees the complete batch set,
-        # not just the first slice of the Drive.
+        processed_batches = {item["batch"] for item in partials}
+        failed_set = set(failed_batches)
+        unprocessed_batches = [
+            index for index in range(1, len(chunks) + 1)
+            if index not in processed_batches and index not in failed_set
+        ]
+
+        # A failed batch makes the corpus analysis incomplete. Do not synthesize
+        # a misleading "whole workspace" answer from a partial corpus.
+        if failed_batches or unprocessed_batches:
+            merged = merge_partials()
+            if not partials:
+                reason = "semantic analysis unavailable: " + " | ".join(batch_errors)
+                _telemetry(enabled=True, available=False, status="UNAVAILABLE",
+                           provider="FALLBACK", expected_batches=len(chunks),
+                           failed_batches=failed_batches, unprocessed_batches=unprocessed_batches,
+                           documents=len(documents), reason=reason[:500])
+                return {
+                    "enabled": True, "available": False, "status": "UNAVAILABLE", "complete": False,
+                    "reason": reason[:1000], "batches": 0, "expected_batches": len(chunks),
+                    "failed_batches": failed_batches, "unprocessed_batches": unprocessed_batches,
+                    "documents": len(documents),
+                }
+            _telemetry(enabled=True, available=True, status="PARTIAL",
+                       provider="PARTIAL_BATCH_MERGE", batches=len(partials),
+                       expected_batches=len(chunks), failed_batches=failed_batches,
+                       unprocessed_batches=unprocessed_batches, documents=len(documents),
+                       findings=len(merged["findings"]), proposals=len(merged["proposals"]),
+                       warning=" | ".join(batch_errors)[:500])
+            return {
+                "enabled": True, "available": True, "status": "PARTIAL", "complete": False,
+                "provider": "PARTIAL_BATCH_MERGE", "model": "validated-batch-results",
+                "batches": len(partials), "expected_batches": len(chunks),
+                "failed_batches": failed_batches, "unprocessed_batches": unprocessed_batches,
+                "documents": len(documents), "findings": merged["findings"],
+                "proposals": merged["proposals"], "warnings": batch_errors[:20],
+            }
+
+        # Only a complete first pass is eligible for cross-batch synthesis.
         synthesis_material = json.dumps(partials, ensure_ascii=False)
         synthesis_prompt = (
             "Synthesize the ENTIRE supplied Google Drive workspace as one coherent project. "
@@ -250,80 +297,53 @@ def analyze_with_ai(documents):
         try:
             final_result = run_model(synthesis_prompt)
             final_validated = _validate(final_result.output, documents)
-            _telemetry(
-                enabled=True,
-                available=True,
-                provider=final_result.provider,
-                model=final_result.model,
-                batches=len(chunks),
-                documents=len(documents),
-                findings=len(final_validated["findings"]),
-                proposals=len(final_validated["proposals"]),
-            )
+            _telemetry(enabled=True, available=True, status="COMPLETE",
+                       provider=final_result.provider, model=final_result.model,
+                       batches=len(chunks), expected_batches=len(chunks), documents=len(documents),
+                       findings=len(final_validated["findings"]), proposals=len(final_validated["proposals"]))
             return {
-                "enabled": True,
-                "available": True,
-                "provider": final_result.provider,
-                "model": final_result.model,
-                "batches": len(chunks),
-                "documents": len(documents),
-                "findings": final_validated["findings"],
+                "enabled": True, "available": True, "status": "COMPLETE", "complete": True,
+                "provider": final_result.provider, "model": final_result.model,
+                "batches": len(chunks), "expected_batches": len(chunks),
+                "documents": len(documents), "findings": final_validated["findings"],
                 "proposals": final_validated["proposals"],
             }
         except (ProviderError, ValueError, TypeError, KeyError, IndexError) as synthesis_error:
-            # The batch calls may have succeeded even when the final synthesis
-            # call times out or every remaining provider fails. Preserve those
-            # evidence-validated results instead of discarding all AI work.
-            merged = {"findings": [], "proposals": []}
-            seen = {"findings": set(), "proposals": set()}
-            for partial in partials:
-                for key in ("findings", "proposals"):
-                    for item in partial.get(key, []):
-                        fingerprint = json.dumps(item, sort_keys=True, ensure_ascii=False)
-                        if fingerprint not in seen[key]:
-                            seen[key].add(fingerprint)
-                            merged[key].append(item)
-            if partials:
-                _telemetry(
-                    enabled=True,
-                    available=True,
-                    provider="PARTIAL_BATCH_MERGE",
-                    model="validated-batch-results",
-                    synthesis="unavailable",
-                    batches=len(partials),
-                    expected_batches=len(chunks),
-                    documents=len(documents),
-                    findings=len(merged["findings"]),
-                    proposals=len(merged["proposals"]),
-                    warning=str(synthesis_error)[:240],
-                )
-                return {
-                    "enabled": True,
-                    "available": True,
-                    "provider": "PARTIAL_BATCH_MERGE",
-                    "model": "validated-batch-results",
-                    "batches": len(partials),
-                    "documents": len(documents),
-                    "findings": merged["findings"],
-                    "proposals": merged["proposals"],
-                    "synthesis_warning": str(synthesis_error)[:500],
-                }
-            raise
-    except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
-        _telemetry(
-            enabled=True,
-            available=False,
-            provider="FALLBACK",
-            error_type=type(exc).__name__,
-            reason=str(exc),
-            batches=len(partials),
-            documents=len(documents),
-        )
+            merged = merge_partials()
+            _telemetry(enabled=True, available=True, status="PARTIAL",
+                       provider="PARTIAL_BATCH_MERGE", model="validated-batch-results",
+                       synthesis="unavailable", batches=len(partials), expected_batches=len(chunks),
+                       documents=len(documents), findings=len(merged["findings"]),
+                       proposals=len(merged["proposals"]), warning=str(synthesis_error)[:240])
+            return {
+                "enabled": True, "available": True, "status": "PARTIAL", "complete": False,
+                "provider": "PARTIAL_BATCH_MERGE", "model": "validated-batch-results",
+                "batches": len(partials), "expected_batches": len(chunks), "documents": len(documents),
+                "findings": merged["findings"], "proposals": merged["proposals"],
+                "synthesis_warning": str(synthesis_error)[:500],
+            }
+    except Exception as exc:
+        # Fail closed at the outer boundary, while preserving diagnostics and
+        # never claiming the semantic pass completed.
+        merged = merge_partials()
+        if partials:
+            _telemetry(enabled=True, available=True, status="PARTIAL",
+                       provider="PARTIAL_BATCH_MERGE", batches=len(partials),
+                       expected_batches=len(chunks), documents=len(documents),
+                       findings=len(merged["findings"]), proposals=len(merged["proposals"]),
+                       warning=f"{type(exc).__name__}:{str(exc)[:240]}")
+            return {
+                "enabled": True, "available": True, "status": "PARTIAL", "complete": False,
+                "provider": "PARTIAL_BATCH_MERGE", "model": "validated-batch-results",
+                "batches": len(partials), "expected_batches": len(chunks), "documents": len(documents),
+                "findings": merged["findings"], "proposals": merged["proposals"],
+                "warning": f"{type(exc).__name__}:{str(exc)[:500]}",
+            }
+        _telemetry(enabled=True, available=False, status="UNAVAILABLE", provider="FALLBACK",
+                   error_type=type(exc).__name__, reason=str(exc)[:500],
+                   batches=0, expected_batches=len(chunks), documents=len(documents))
         return {
-            "enabled": True,
-            "available": False,
-            "reason": f"semantic analysis unavailable: {exc}",
-            "batches": len(partials),
-            "documents": len(documents),
+            "enabled": True, "available": False, "status": "UNAVAILABLE", "complete": False,
+            "reason": f"semantic analysis unavailable: {type(exc).__name__}: {str(exc)[:500]}",
+            "batches": 0, "expected_batches": len(chunks), "documents": len(documents),
         }
-
