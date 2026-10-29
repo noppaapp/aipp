@@ -133,3 +133,54 @@ def test_synthesis_failure_preserves_validated_batch_results(monkeypatch):
     assert result["proposals"][0]["requires_authority"] is True
     assert "synthesis timed out" in result["synthesis_warning"]
 
+
+
+def test_later_batch_failure_preserves_prior_results_and_marks_analysis_incomplete(monkeypatch):
+    monkeypatch.setenv("AIPP_SEMANTIC_ANALYSIS", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    class Model:
+        provider = "gemini"
+        model = "flash"
+        priority = 100
+
+    class Adapter:
+        calls = 0
+
+        def execute(self, model_spec, task):
+            self.calls += 1
+            if self.calls == 1:
+                return {
+                    "findings": [{
+                        "type": "verified_observation",
+                        "claim": "İlk grup doğrulandı.",
+                        "evidence": [{
+                            "file_name": "ideas.md",
+                            "quote": "Next step: verify this source.",
+                        }],
+                    }],
+                    "proposals": [],
+                }
+            raise module.ProviderError("provider unavailable on second batch")
+
+    adapter = Adapter()
+    monkeypatch.setattr(module, "_document_chunks", lambda documents: ["batch one", "batch two"])
+    monkeypatch.setattr(module, "DEFAULT_MODELS", (Model(),))
+    monkeypatch.setattr(module, "configured_adapter", lambda provider: adapter)
+
+    result = module.analyze_with_ai([{
+        "name": "ideas.md",
+        "text": "Next step: verify this source.",
+    }])
+
+    assert result["available"] is True
+    assert result["status"] == "PARTIAL"
+    assert result["complete"] is False
+    assert result["batches"] == 1
+    assert result["expected_batches"] == 2
+    assert result["failed_batches"] == [2]
+    assert result["findings"][0]["claim"] == "İlk grup doğrulandı."
+    assert result["findings"][0]["evidence"][0]["quote"] == "Next step: verify this source."
