@@ -408,6 +408,11 @@ def status():
             }
         )
     except Exception as exc:
+        print(
+            f"AIPP_RUN_FAILED command={command} type={type(exc).__name__} "
+            f"message={str(exc)[:500]}",
+            flush=True,
+        )
         return jsonify(
             {
                 "ok": False,
@@ -752,6 +757,11 @@ def _run_runtime_job(job_id, body):
                 "http_status": int(status_code),
             })
     except Exception as exc:
+        print(
+            f"AIPP_RUNTIME_JOB_FAILED job_id={job_id} type={type(exc).__name__} "
+            f"message={str(exc)[:500]}",
+            flush=True,
+        )
         with RUNTIME_JOBS_LOCK:
             RUNTIME_JOBS[job_id].update({
                 "status": "FAILED",
@@ -808,7 +818,16 @@ def runtime_job_status(job_id):
     if snapshot["status"] == "RUNNING":
         return jsonify({"ok": True, "job_id": job_id, "status": "RUNNING"}), 200
     if snapshot["status"] == "FAILED":
-        return jsonify(snapshot.get("data") or {"ok": False, "error": "Runtime scan failed."}), int(snapshot.get("http_status") or 500)
+        # Job status is a successful status lookup even when the job itself failed.
+        # Return an envelope so the panel can distinguish FAILED from transport errors
+        # and preserve the actual failure reason for the operator.
+        return jsonify({
+            "ok": False,
+            "job_id": job_id,
+            "status": "FAILED",
+            "data": snapshot.get("data") or {"ok": False, "error": "Runtime scan failed."},
+            "http_status": int(snapshot.get("http_status") or 500),
+        }), 200
     return jsonify({"ok": True, "job_id": job_id, "status": "COMPLETED", "data": snapshot.get("data")}), 200
 
 
