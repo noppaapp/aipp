@@ -158,7 +158,7 @@ def analyze_with_ai(documents):
     partials = []
     failed_batches = []
     batch_errors = []
-    unavailable_providers = set()
+    unavailable_models = set()
 
     def merge_partials():
         merged = {"findings": [], "proposals": []}
@@ -192,7 +192,7 @@ def analyze_with_ai(documents):
             errors = []
             for model_spec in ordered:
                 provider = model_spec.provider
-                if provider in unavailable_providers:
+                if (provider, model_spec.model) in unavailable_models:
                     continue
                 try:
                     task = {
@@ -209,12 +209,13 @@ def analyze_with_ai(documents):
                     )
                     return result
                 except Exception as exc:
-                    # A provider is quarantined for this scan after a transport,
-                    # quota, response-shape, or JSON failure. Other providers
-                    # remain eligible for fallback on the current and later batches.
+                    # A specific provider/model pair is quarantined for this scan after a
+                    # transport, quota, response-shape, or JSON failure. Other
+                    # models from the same provider remain eligible, so a
+                    # model-specific outage does not suppress a valid fallback.
                     detail = str(exc) or type(exc).__name__
                     errors.append(f"{provider}:{type(exc).__name__}:{detail[:240]}")
-                    unavailable_providers.add(provider)
+                    unavailable_models.add((provider, model_spec.model))
             raise ProviderError("all configured AI providers failed: " + " | ".join(errors))
 
         for index, chunk in enumerate(chunks, start=1):
@@ -240,7 +241,7 @@ def analyze_with_ai(documents):
                 batch_errors.append(f"batch={index}:{type(exc).__name__}:{str(exc)[:240]}")
                 # If every configured provider is unavailable, later batches
                 # cannot succeed in this scan. Mark them explicitly as unprocessed.
-                if len(unavailable_providers) >= len(ordered):
+                if len(unavailable_models) >= len(ordered):
                     break
 
         processed_batches = {item["batch"] for item in partials}
