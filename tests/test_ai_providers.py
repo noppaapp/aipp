@@ -121,9 +121,8 @@ def test_semantic_analysis_falls_back_when_gemini_quota_is_exhausted(monkeypatch
     assert result["available"] is True
     assert result["provider"] == "groq"
     assert result["findings"][0]["evidence"][0]["quote"] == "Source line exact."
-    assert calls[:3] == [
+    assert calls == [
         ("gemini", "flash"),
-        ("gemini", "pro"),
         ("groq", "openai/gpt-oss-120b"),
     ]
     assert all(provider in {"gemini", "groq"} for provider, _ in calls)
