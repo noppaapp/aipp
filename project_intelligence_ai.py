@@ -168,10 +168,17 @@ def analyze_with_ai(documents):
 
         ordered = sorted(registry, key=lambda model: model.priority, reverse=True)
 
+        # A quota/rate-limit response applies to the provider, not just one
+        # model variant. Do not waste the scan budget retrying another model
+        # on the same exhausted provider.
+        unavailable_providers = set()
+
         def run_model(prompt):
             errors = []
             for model_spec in ordered:
                 provider = model_spec.provider
+                if provider in unavailable_providers:
+                    continue
                 try:
                     task = {
                         "capabilities": ("text", "reasoning"),
@@ -187,7 +194,11 @@ def analyze_with_ai(documents):
                     )
                     return result
                 except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
-                    errors.append(f"{provider}:{type(exc).__name__}:{exc}")
+                    detail = str(exc)
+                    errors.append(f"{provider}:{type(exc).__name__}:{detail}")
+                    lowered = detail.lower()
+                    if "429" in lowered or "quota" in lowered or "rate limit" in lowered:
+                        unavailable_providers.add(provider)
             raise ProviderError("all configured AI providers failed: " + " | ".join(errors))
 
         # First pass: every readable Drive document is included in one or more
