@@ -4,6 +4,8 @@ import hmac
 import json
 import os
 import subprocess
+import threading
+import uuid
 import sys
 from pathlib import Path
 
@@ -417,12 +419,11 @@ def status():
         ), 500
 
 
-@app.post("/api/run")
-def run():
-    body = request.get_json(silent=True) or {}
-    auth_error = _require_runtime_token(body)
-    if auth_error:
-        return auth_error
+RUNTIME_JOBS = {}
+RUNTIME_JOBS_LOCK = threading.Lock()
+
+
+def _execute_run(body):
     try:
         command = str(body.get("command") or "BAŞLA").upper()
         task = str(body.get("task") or "").strip() or None
@@ -730,6 +731,85 @@ def run():
                 "error": str(exc),
             }
         ), 500
+
+
+
+def _run_runtime_job(job_id, body):
+    try:
+        payload = dict(body)
+        payload.pop("_aipp_background_execution", None)
+        with app.app_context():
+            outcome = _execute_run(payload)
+            if isinstance(outcome, tuple):
+                response, status_code = outcome
+            else:
+                response, status_code = outcome, getattr(outcome, "status_code", 200)
+            data = response.get_json(silent=True) if hasattr(response, "get_json") else outcome
+        with RUNTIME_JOBS_LOCK:
+            RUNTIME_JOBS[job_id].update({
+                "status": "COMPLETED" if 200 <= int(status_code) < 300 else "FAILED",
+                "data": data,
+                "http_status": int(status_code),
+            })
+    except Exception as exc:
+        with RUNTIME_JOBS_LOCK:
+            RUNTIME_JOBS[job_id].update({
+                "status": "FAILED",
+                "data": {"ok": False, "error": str(exc)},
+                "http_status": 500,
+            })
+
+
+@app.post("/api/run")
+def run():
+    body = request.get_json(silent=True) or {}
+    auth_error = _require_runtime_token(body)
+    if auth_error:
+        return auth_error
+    if body.pop("_aipp_background_execution", False):
+        return _execute_run(body)
+    command = str(body.get("command") or "BAŞLA").upper()
+    if command != "BAŞLA":
+        return _execute_run(body)
+
+    with RUNTIME_JOBS_LOCK:
+        active_id = next(
+            (job_id for job_id, job in RUNTIME_JOBS.items() if job.get("status") == "RUNNING"),
+            None,
+        )
+        if active_id:
+            return jsonify({"ok": True, "job_id": active_id, "status": "RUNNING", "reused_job": True}), 202
+        while len(RUNTIME_JOBS) >= 100:
+            removable = next(
+                (job_id for job_id, job in RUNTIME_JOBS.items() if job.get("status") != "RUNNING"),
+                None,
+            )
+            if removable is None:
+                return jsonify({"ok": False, "error": "Runtime job capacity reached; retry after an active scan finishes."}), 429
+            RUNTIME_JOBS.pop(removable, None)
+        job_id = uuid.uuid4().hex
+        RUNTIME_JOBS[job_id] = {"status": "RUNNING"}
+    payload = dict(body)
+    payload["_aipp_background_execution"] = True
+    threading.Thread(target=_run_runtime_job, args=(job_id, payload), daemon=True).start()
+    return jsonify({"ok": True, "job_id": job_id, "status": "RUNNING"}), 202
+
+
+@app.get("/api/jobs/<job_id>")
+def runtime_job_status(job_id):
+    auth_error = _require_runtime_token()
+    if auth_error:
+        return auth_error
+    with RUNTIME_JOBS_LOCK:
+        job = RUNTIME_JOBS.get(job_id)
+        if not job:
+            return jsonify({"ok": False, "error": "Runtime job not found; the service may have restarted."}), 404
+        snapshot = dict(job)
+    if snapshot["status"] == "RUNNING":
+        return jsonify({"ok": True, "job_id": job_id, "status": "RUNNING"}), 200
+    if snapshot["status"] == "FAILED":
+        return jsonify(snapshot.get("data") or {"ok": False, "error": "Runtime scan failed."}), int(snapshot.get("http_status") or 500)
+    return jsonify({"ok": True, "job_id": job_id, "status": "COMPLETED", "data": snapshot.get("data")}), 200
 
 
 if __name__ == "__main__":
