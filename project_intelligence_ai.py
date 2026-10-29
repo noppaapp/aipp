@@ -196,9 +196,19 @@ def analyze_with_ai(documents):
                 except (ProviderError, ValueError, TypeError, KeyError, IndexError) as exc:
                     detail = str(exc)
                     errors.append(f"{provider}:{type(exc).__name__}:{detail}")
-                    lowered = detail.lower()
-                    if "429" in lowered or "quota" in lowered or "rate limit" in lowered:
-                        unavailable_providers.add(provider)
+                    # A provider failure is not a reason to retry the same provider
+                    # for every remaining document batch. Quota, access, empty
+                    # response, and model availability failures are provider-wide
+                    # for this scan; deterministic analysis must continue promptly.
+                    unavailable_providers.add(provider)
+                except Exception as exc:
+                    # Adapters may raise TimeoutError or transport-specific
+                    # exceptions that do not inherit ProviderError. Convert them
+                    # into a bounded provider failure so one flaky provider cannot
+                    # abort the entire Drive job or strand its background status.
+                    detail = str(exc) or type(exc).__name__
+                    errors.append(f"{provider}:{type(exc).__name__}:{detail[:240]}")
+                    unavailable_providers.add(provider)
             raise ProviderError("all configured AI providers failed: " + " | ".join(errors))
 
         # First pass: every readable Drive document is included in one or more
