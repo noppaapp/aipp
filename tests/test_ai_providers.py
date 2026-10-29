@@ -123,6 +123,7 @@ def test_semantic_analysis_falls_back_when_gemini_quota_is_exhausted(monkeypatch
     assert result["findings"][0]["evidence"][0]["quote"] == "Source line exact."
     assert calls == [
         ("gemini", "flash"),
+        ("gemini", "pro"),
         ("groq", "openai/gpt-oss-120b"),
         ("groq", "openai/gpt-oss-120b"),
     ]
