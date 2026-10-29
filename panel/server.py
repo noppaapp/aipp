@@ -140,6 +140,10 @@ def _run_background_job(job_id, payload):
                     if not isinstance(result, dict):
                         raise RuntimeError('Runtime scan completed without a valid result.')
                     break
+                if state.get('status') == 'FAILED':
+                    failure = state.get('data') or {}
+                    message = failure.get('error') if isinstance(failure, dict) else None
+                    raise RuntimeError(str(message or 'Runtime scan failed without a reason.'))
             else:
                 raise RuntimeError('Runtime scan did not finish within 14 minutes. It was not automatically restarted.')
         with JOBS_LOCK:
