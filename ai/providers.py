@@ -13,7 +13,15 @@ class ProviderError(RuntimeError):
     pass
 
 
-def _post_json(url, headers, payload, timeout=90):
+def _post_json(url, headers, payload, timeout=None):
+    if timeout is None:
+        # Provider stalls must not consume the runner's full 300-second budget.
+        # Allow an operator override, but keep the timeout safely bounded.
+        try:
+            timeout = int(os.environ.get("AIPP_AI_REQUEST_TIMEOUT_SECONDS", "15"))
+        except (TypeError, ValueError):
+            timeout = 15
+        timeout = max(5, min(timeout, 30))
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
