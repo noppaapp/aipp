@@ -124,5 +124,6 @@ def test_semantic_analysis_falls_back_when_gemini_quota_is_exhausted(monkeypatch
     assert calls == [
         ("gemini", "flash"),
         ("groq", "openai/gpt-oss-120b"),
+        ("groq", "openai/gpt-oss-120b"),
     ]
     assert all(provider in {"gemini", "groq"} for provider, _ in calls)
