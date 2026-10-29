@@ -24,6 +24,22 @@ ARTIFACT_DIR = Path("artifacts")
 DISCOVERED_TASKS_ENV = "AIPP_DISCOVERED_TASKS_B64"
 PROJECT_INTELLIGENCE_ENV = "AIPP_PROJECT_INTELLIGENCE_B64"
 COMPLETION_GATE_ENV = "AIPP_REQUIRE_COMPLETION_GATE"
+_RUNNER_STDIN_PAYLOAD = None
+
+
+def _load_runner_stdin_payload():
+    """Read the shared ephemeral stdin envelope once per runner process."""
+    global _RUNNER_STDIN_PAYLOAD
+    if _RUNNER_STDIN_PAYLOAD is None:
+        try:
+            raw = sys.stdin.read()
+            value = json.loads(raw) if raw.strip() else {}
+        except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("HALT: Runner stdin transport is invalid") from exc
+        if not isinstance(value, dict):
+            raise RuntimeError("HALT: Runner stdin transport must be an object")
+        _RUNNER_STDIN_PAYLOAD = value
+    return _RUNNER_STDIN_PAYLOAD
 
 
 def utc_now():
@@ -91,7 +107,12 @@ def load_discovered_tasks():
 
 
 def load_project_intelligence():
-    if os.environ.get("AIPP_PROJECT_INTELLIGENCE_STDIN", "").strip() == "1":
+    if os.environ.get("AIPP_RUNNER_STDIN", "").strip() == "1":
+        value = _load_runner_stdin_payload().get(
+            "project_intelligence",
+            {"version": "0", "findings": [], "proposals": []},
+        )
+    elif os.environ.get("AIPP_PROJECT_INTELLIGENCE_STDIN", "").strip() == "1":
         try:
             value = json.loads(sys.stdin.read())
         except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -254,6 +275,9 @@ def default_state():
 
 
 def load_state():
+    if os.environ.get("AIPP_RUNNER_STDIN", "").strip() == "1":
+        value = _load_runner_stdin_payload().get("session_state")
+        return value if isinstance(value, dict) else default_state()
     encoded = os.environ.get("AIPP_SESSION_STATE_B64", "").strip()
     if encoded:
         try:
