@@ -127,6 +127,21 @@ def status():
 def _run_background_job(job_id, payload):
     try:
         result = runtime_request('/api/run', 'POST', payload)
+        if result.get('job_id'):
+            import time
+            runtime_job_id = str(result['job_id'])
+            for _ in range(420):
+                time.sleep(2)
+                state = runtime_request('/api/jobs/' + runtime_job_id, 'GET')
+                if state.get('status') == 'RUNNING':
+                    continue
+                if state.get('status') == 'COMPLETED':
+                    result = state.get('data')
+                    if not isinstance(result, dict):
+                        raise RuntimeError('Runtime scan completed without a valid result.')
+                    break
+            else:
+                raise RuntimeError('Runtime scan did not finish within 14 minutes. It was not automatically restarted.')
         with JOBS_LOCK:
             JOBS[job_id].update({'status': 'COMPLETED', 'result': result})
     except RuntimeRequestError as exc:
