@@ -299,8 +299,11 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persist
         )
 
     env = os.environ.copy()
-    if reset_session_state:
-        env.pop("AIPP_SESSION_STATE_B64", None)
+    # Session snapshots can become large after a full Drive scan. Never pass
+    # them as base64 environment variables: execve can reject the whole process
+    # with E2BIG even when project intelligence itself is sent over stdin.
+    env.pop("AIPP_SESSION_STATE_B64", None)
+    env["AIPP_RUNNER_STDIN"] = "1"
     env["AIPP_PROJECT_BOOT_B64"] = base64.b64encode(boot_text.encode()).decode()
     if authority_text_override is not None:
         authority_text = authority_text_override
@@ -308,18 +311,14 @@ def _run_aipp(command, task=None, max_attempts=3, include_ai=True, reuse_persist
     env["AIPP_DISCOVERED_TASKS_B64"] = base64.b64encode(
         json.dumps(candidates, ensure_ascii=False).encode()
     ).decode()
-    # Large workspace intelligence can exceed the OS per-environment-string
-    # limit when base64-encoded. Send it over stdin instead; this keeps the
-    # transport ephemeral and avoids ARG_MAX failures on large Drive scans.
     env.pop("AIPP_PROJECT_INTELLIGENCE_B64", None)
-    env["AIPP_PROJECT_INTELLIGENCE_STDIN"] = "1"
-    intelligence_input = json.dumps(intelligence, ensure_ascii=False)
-    # Carry the persisted runtime state into the runner so every command
-    # continues the same session instead of rebuilding from an empty state.
-    if session_state:
-        env["AIPP_SESSION_STATE_B64"] = base64.b64encode(
-            json.dumps(session_state, ensure_ascii=False).encode()
-        ).decode()
+    env.pop("AIPP_PROJECT_INTELLIGENCE_STDIN", None)
+    # Send all potentially large session/analysis data in one ephemeral stdin
+    # envelope. The runner reads stdin once and serves both payloads from RAM.
+    intelligence_input = json.dumps({
+        "project_intelligence": intelligence,
+        "session_state": session_state,
+    }, ensure_ascii=False)
 
     cmd = [
         sys.executable,
