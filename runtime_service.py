@@ -409,7 +409,7 @@ def status():
         )
     except Exception as exc:
         print(
-            f"AIPP_RUN_FAILED command={command} type={type(exc).__name__} "
+            f"AIPP_STATUS_FAILED type={type(exc).__name__} "
             f"message={str(exc)[:500]}",
             flush=True,
         )
@@ -727,6 +727,11 @@ def _execute_run(body):
             200 if code == 0 else 422,
         )
     except Exception as exc:
+        print(
+            f"AIPP_RUN_FAILED command={command} type={type(exc).__name__} "
+            f"message={str(exc)[:500]}",
+            flush=True,
+        )
         return jsonify(
             {
                 "ok": False,
@@ -736,7 +741,6 @@ def _execute_run(body):
                 "error": str(exc),
             }
         ), 500
-
 
 
 def _run_runtime_job(job_id, body):
