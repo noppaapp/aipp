@@ -155,3 +155,32 @@ def test_project_intelligence_loads_large_payload_from_stdin(monkeypatch):
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
 
     assert aipp_runner.load_project_intelligence() == payload
+
+
+def test_large_session_state_and_intelligence_share_stdin_without_environment_payloads(monkeypatch):
+    import base64
+    import io
+    import aipp_runner
+
+    session = {
+        "status": "PROPOSAL_READY",
+        "task_lifecycle": {"NOW": None, "FUTURE": [], "COMPLETED": []},
+        "workspace_map": {"evidence": "x" * 200000},
+    }
+    intelligence = {
+        "version": "2",
+        "findings": [{"type": "near_duplicate", "evidence": [{"quote": "y" * 200000}]}],
+        "proposals": [],
+    }
+    envelope = json.dumps({
+        "session_state": session,
+        "project_intelligence": intelligence,
+    })
+    monkeypatch.setenv("AIPP_RUNNER_STDIN", "1")
+    monkeypatch.delenv("AIPP_SESSION_STATE_B64", raising=False)
+    monkeypatch.delenv("AIPP_PROJECT_INTELLIGENCE_B64", raising=False)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(envelope))
+    monkeypatch.setattr(aipp_runner, "_RUNNER_STDIN_PAYLOAD", None)
+
+    assert aipp_runner.load_state() == session
+    assert aipp_runner.load_project_intelligence() == intelligence
