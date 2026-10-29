@@ -84,3 +84,52 @@ def test_provider_timeout_falls_back_without_aborting_scan(monkeypatch):
     assert result["enabled"] is True
     assert result["available"] is False
     assert "TimeoutError" in result["reason"]
+
+def test_synthesis_failure_preserves_validated_batch_results(monkeypatch):
+    monkeypatch.setenv("AIPP_SEMANTIC_ANALYSIS", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    class Model:
+        provider = "gemini"
+        model = "flash"
+        priority = 100
+
+    class Adapter:
+        calls = 0
+
+        def execute(self, model_spec, task):
+            self.calls += 1
+            if self.calls == 1:
+                return {
+                    "findings": [{
+                        "type": "verified_observation",
+                        "claim": "Kaynak metin doğrulandı.",
+                        "evidence": [{
+                            "file_name": "ideas.md",
+                            "quote": "Next step: verify this source.",
+                        }],
+                    }],
+                    "proposals": [],
+                }
+            raise module.ProviderError("synthesis timed out")
+
+    adapter = Adapter()
+    monkeypatch.setattr(module, "DEFAULT_MODELS", (Model(),))
+    monkeypatch.setattr(module, "configured_adapter", lambda provider: adapter)
+
+    result = module.analyze_with_ai([{
+        "name": "ideas.md",
+        "text": "Next step: verify this source.",
+    }])
+
+    assert result["enabled"] is True
+    assert result["available"] is True
+    assert result["provider"] == "PARTIAL_BATCH_MERGE"
+    assert result["findings"][0]["type"] == "verified_observation"
+    assert result["findings"][0]["evidence"][0]["quote"] == "Next step: verify this source."
+    assert result["proposals"][0]["requires_authority"] is True
+    assert "synthesis timed out" in result["synthesis_warning"]
+
