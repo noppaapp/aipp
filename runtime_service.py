@@ -415,7 +415,11 @@ def status():
                 "runtime": "AIPP Standalone Cloud Runtime",
                 "oauth_client_fingerprint": _oauth_client_fingerprint(),
                 "error": str(exc),
-  RUNTIME_JOBS = {}
+            }
+        ), 500
+
+
+RUNTIME_JOBS = {}
 RUNTIME_JOBS_LOCK = threading.Lock()
 
 
@@ -728,7 +732,7 @@ def _execute_run(body):
             }
         ), 500
 
-    
+
 
 def _run_runtime_job(job_id, body):
     try:
@@ -806,8 +810,6 @@ def runtime_job_status(job_id):
     if snapshot["status"] == "FAILED":
         return jsonify(snapshot.get("data") or {"ok": False, "error": "Runtime scan failed."}), int(snapshot.get("http_status") or 500)
     return jsonify({"ok": True, "job_id": job_id, "status": "COMPLETED", "data": snapshot.get("data")}), 200
-            }
-        ), 500
 
 
 if __name__ == "__main__":
