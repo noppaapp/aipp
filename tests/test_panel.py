@@ -143,3 +143,50 @@ def test_operator_api_rejects_missing_or_invalid_panel_token(monkeypatch):
 
     assert missing.status_code == 401
     assert invalid.status_code == 401
+
+def test_panel_surfaces_runtime_job_failure_reason(monkeypatch):
+    import time
+
+    calls = []
+
+    def fake_runtime_request(path, method="GET", payload=None):
+        calls.append((path, method))
+        if path == "/api/run":
+            return {"ok": True, "job_id": "runtime-job-1", "status": "RUNNING"}
+        if path == "/api/jobs/runtime-job-1":
+            return {
+                "ok": False,
+                "job_id": "runtime-job-1",
+                "status": "FAILED",
+                "data": {"ok": False, "error": "Drive state write failed"},
+            }
+        raise AssertionError(f"Unexpected runtime request: {path}")
+
+    class ImmediateThread:
+        def __init__(self, target, args, daemon):
+            self.target, self.args = target, args
+        def start(self):
+            self.target(*self.args)
+
+    monkeypatch.setattr(panel_server.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(panel_server, "runtime_request", fake_runtime_request)
+    monkeypatch.setattr(panel_server, "PANEL_TOKEN", "test-panel-token")
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    panel_server.JOBS.clear()
+
+    client = panel_server.app.test_client()
+    started = client.post(
+        "/api/command",
+        headers={"X-AIPP-Panel-Token": "test-panel-token"},
+        json={"command": "BAŞLA"},
+    )
+    job_id = started.get_json()["job_id"]
+    status = client.get(
+        f"/api/jobs/{job_id}",
+        headers={"X-AIPP-Panel-Token": "test-panel-token"},
+    )
+
+    assert started.status_code == 202
+    assert status.status_code == 502
+    assert status.get_json()["error"] == "Drive state write failed"
+    assert calls == [("/api/run", "POST"), ("/api/jobs/runtime-job-1", "GET")]
