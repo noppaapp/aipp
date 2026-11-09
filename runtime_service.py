@@ -22,6 +22,7 @@ from aipp_drive_runtime import (
     write_session_state,
     discover_task_candidates,
     list_workspace_tree,
+    list_workspace_inventory,
     get_credentials,
 )
 from project_intelligence import analyze_documents, build_boot_version_update_proposal
@@ -425,6 +426,53 @@ def status():
                 "error": str(exc),
             }
         ), 500
+
+
+
+@app.get("/api/inventory")
+def inventory():
+    """Authenticated, read-only metadata inventory for configured Drive roots."""
+    auth_error = _require_runtime_token()
+    if auth_error:
+        return auth_error
+    try:
+        token = get_access_token()
+        roots = []
+        configured = [
+            ("AIPP", os.environ.get("GDRIVE_FOLDER_ID", "").strip()),
+            ("NOPPA", os.environ.get("NOPPA_GDRIVE_FOLDER_ID", "").strip()),
+        ]
+        seen = set()
+        for label, folder_id in configured:
+            if not folder_id or folder_id in seen:
+                continue
+            seen.add(folder_id)
+            inventory_data = list_workspace_inventory(token, folder_id)
+            inventory_data["workspace"] = label
+            roots.append(inventory_data)
+        if not roots:
+            return jsonify({"ok": False, "error": "No Drive inventory roots are configured."}), 503
+        total_items = sum(root["total_items"] for root in roots)
+        response = jsonify({
+            "ok": True,
+            "source": "Google Drive",
+            "mode": "READ_ONLY_METADATA",
+            "content_downloaded": False,
+            "ai_analysis_performed": False,
+            "drive_writes_performed": False,
+            "total_items": total_items,
+            "workspaces": roots,
+        })
+        response.headers["Content-Disposition"] = 'attachment; filename="aipp-drive-inventory.json"'
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        print(
+            f"AIPP_INVENTORY_FAILED type={type(exc).__name__} "
+            f"message={str(exc)[:300]}",
+            flush=True,
+        )
+        return jsonify({"ok": False, "source": "Google Drive", "error": str(exc)}), 500
 
 
 RUNTIME_JOBS = {}
