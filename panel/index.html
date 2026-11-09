@@ -167,21 +167,29 @@ async function updateAuth(){
   const el=document.getElementById('authState');
   const t=token();
   try{
-    const h=t?{'X-AIPP-Panel-Token':t}:{};
-    const r=await fetch('/api/config-status',{headers:h,cache:'no-store'});
-    if(r.status===401){
-      el.textContent=t?'Panel anahtarı geçersiz':'Panel anahtarı gerekiyor';
+    const diagnostic=await fetch('/api/auth-diagnostic',{cache:'no-store'});
+    if(!diagnostic.ok)throw new Error('auth diagnostic unavailable');
+    const d=await diagnostic.json();
+    if(!d.panel_token_configured){
+      el.textContent='Render tarafında AIPP_PANEL_TOKEN tanımlı değil';
       return;
     }
-    if(!r.ok)throw new Error('config status unavailable');
-    const d=await r.json();
-    if(d.panel_token_configured){
-      el.textContent='Panel bağlantısı doğrulandı';
-    }else{
-      el.textContent='Panel anahtarı gerekmiyor';
+    if(!t){
+      el.textContent='Tarayıcıda panel anahtarı yok; e-postandaki anahtarı gir';
+      return;
     }
+    const bytes=new TextEncoder().encode(t);
+    const digest=await crypto.subtle.digest('SHA-256',bytes);
+    const localFingerprint=Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,12);
+    if(localFingerprint!==d.panel_token_fingerprint){
+      el.textContent='Anahtar uyuşmazlığı: tarayıcıdaki anahtar ile Render anahtarı farklı';
+      return;
+    }
+    const r=await fetch('/api/config-status',{headers:{'X-AIPP-Panel-Token':t},cache:'no-store'});
+    if(!r.ok)throw new Error('authenticated config status unavailable');
+    el.textContent='Panel bağlantısı doğrulandı';
   }catch(_){
-    el.textContent='Panel bağlantısı doğrulanamadı';
+    el.textContent='Panel bağlantısı doğrulanamadı; teknik kayıtları kontrol et';
   }
 }
 function headers(){const h={'Content-Type':'application/json'};if(token())h['X-AIPP-Panel-Token']=token();return h}
