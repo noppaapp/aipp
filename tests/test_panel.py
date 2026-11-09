@@ -216,3 +216,14 @@ def test_panel_inventory_proxies_runtime_and_returns_download(monkeypatch):
     assert response.get_json()["mode"] == "READ_ONLY_METADATA"
     assert "attachment" in response.headers["Content-Disposition"]
     assert calls == [("/api/inventory", "GET")]
+
+
+
+def test_panel_has_read_only_drive_inventory_download_control():
+    from pathlib import Path
+
+    html = (Path(panel_server.__file__).resolve().parent / "index.html").read_text(encoding="utf-8")
+    assert 'id="driveInventoryCard"' in html
+    assert 'onclick="downloadInventory()"' in html
+    assert "READ_ONLY_METADATA" not in html  # UI does not infer success from a client-side flag.
+    assert "api/inventory" in html
