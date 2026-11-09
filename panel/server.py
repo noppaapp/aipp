@@ -194,6 +194,19 @@ def job_status(job_id):
         return jsonify(error), int(snapshot.get('http_status') or 502)
     return jsonify({'ok': True, 'job_id': job_id, 'status': 'COMPLETED', 'data': snapshot.get('result')}), 200
 
+@app.get('/api/auth-diagnostic')
+def auth_diagnostic():
+    # Expose only a short one-way fingerprint, never the panel secret itself.
+    # This endpoint helps distinguish a stale browser token from a misconfigured
+    # Render environment value; all operator APIs remain protected by auth.
+    response = jsonify({
+        'ok': True,
+        'panel_token_configured': bool(PANEL_TOKEN),
+        'panel_token_fingerprint': fingerprint(PANEL_TOKEN),
+    })
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
 @app.get('/api/config-status')
 def config_status():
     auth_error = require_panel_token()
