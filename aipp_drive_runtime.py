@@ -128,6 +128,59 @@ def list_workspace_tree(token, root_folder_id):
     return discovered
 
 
+
+SENSITIVE_NAME_RE = re.compile(
+    r"(credential|secret|token|oauth|private.?key|service.?account|password|\.env)",
+    re.IGNORECASE,
+)
+
+
+def list_workspace_inventory(token, root_folder_id):
+    """Return Drive metadata only; never download or export file contents."""
+    discovered = list_workspace_tree(token, root_folder_id)
+    by_id = {item.get("id"): item for item in discovered if item.get("id")}
+    folder_paths = {root_folder_id: ""}
+    records = []
+
+    def path_for(item):
+        item_id = item.get("id")
+        if item_id in folder_paths:
+            return folder_paths[item_id]
+        parents = item.get("parents") or []
+        parent_id = parents[0] if parents else root_folder_id
+        parent = by_id.get(parent_id)
+        parent_path = path_for(parent) if parent else ""
+        name = str(item.get("name") or "(unnamed)")
+        result = f"{parent_path}/{name}".strip("/")
+        if item.get("mimeType") == FOLDER_MIME and item_id:
+            folder_paths[item_id] = result
+        return result
+
+    for item in discovered:
+        name = str(item.get("name") or "(unnamed)")
+        mime = item.get("mimeType", "")
+        records.append({
+            "id": item.get("id"),
+            "name": name,
+            "path": path_for(item),
+            "mime_type": mime,
+            "size_bytes": int(item["size"]) if str(item.get("size", "")).isdigit() else None,
+            "modified_time": item.get("modifiedTime"),
+            "item_type": "folder" if mime == FOLDER_MIME else "file",
+            "sensitive_name_warning": bool(SENSITIVE_NAME_RE.search(name)),
+        })
+
+    records.sort(key=lambda item: (item["path"].casefold(), item["id"] or ""))
+    return {
+        "root_folder_id": root_folder_id,
+        "total_items": len(records),
+        "folder_count": sum(item["item_type"] == "folder" for item in records),
+        "file_count": sum(item["item_type"] == "file" for item in records),
+        "sensitive_name_warning_count": sum(item["sensitive_name_warning"] for item in records),
+        "items": records,
+    }
+
+
 def find_project_boot(token, folder_id):
     all_files = list_workspace_tree(token, folder_id)
     files = [file_info for file_info in all_files if file_info.get("name") == PROJECT_BOOT]
