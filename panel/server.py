@@ -124,6 +124,22 @@ def status():
     except Exception as exc:
         return jsonify({'ok': False, 'error': str(exc)}), 502
 
+
+@app.get('/api/inventory')
+def inventory():
+    auth_error = require_panel_token()
+    if auth_error:
+        return auth_error
+    try:
+        response = jsonify(runtime_request('/api/inventory'))
+        response.headers['Content-Disposition'] = 'attachment; filename="aipp-drive-inventory.json"'
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    except RuntimeRequestError as exc:
+        return jsonify(exc.data), exc.status_code
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 502
+
 def _run_background_job(job_id, payload):
     try:
         result = runtime_request('/api/run', 'POST', payload)
