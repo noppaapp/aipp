@@ -69,3 +69,28 @@ def test_inventory_deduplicates_same_configured_root(monkeypatch):
     )
     assert response.status_code == 200
     assert calls == ["same-root"]
+
+
+def test_drive_inventory_builds_relative_paths_and_flags_sensitive_names(monkeypatch):
+    import aipp_drive_runtime
+
+    monkeypatch.setattr(
+        aipp_drive_runtime,
+        "list_workspace_tree",
+        lambda token, root_id: [
+            {"id": "folder-1", "name": "Drafts", "mimeType": aipp_drive_runtime.FOLDER_MIME, "parents": [root_id]},
+            {"id": "file-1", "name": "brief.md", "mimeType": "text/markdown", "size": "120", "modifiedTime": "2026-11-01T10:00:00Z", "parents": ["folder-1"]},
+            {"id": "file-2", "name": "service-account-credentials.json", "mimeType": "application/json", "parents": [root_id]},
+        ],
+    )
+
+    result = aipp_drive_runtime.list_workspace_inventory("fake-token", "root")
+
+    assert result["total_items"] == 3
+    assert result["folder_count"] == 1
+    assert result["file_count"] == 2
+    by_name = {item["name"]: item for item in result["items"]}
+    assert by_name["brief.md"]["path"] == "Drafts/brief.md"
+    assert by_name["brief.md"]["size_bytes"] == 120
+    assert by_name["service-account-credentials.json"]["sensitive_name_warning"] is True
+    assert "content" not in by_name["brief.md"]
