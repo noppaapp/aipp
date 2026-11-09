@@ -130,6 +130,14 @@ input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;ba
 <div id="scanFiles" style="margin-top:14px"></div>
 </section>
 
+<section class="card" id="driveInventoryCard">
+<div class="eyebrow">DRIVE ÇALIŞMA ALANI</div>
+<div class="proposal-title">Dosya envanteri</div>
+<div class="desc">AIPP ve Noppa klasörlerindeki dosya ve klasörlerin ad, yol, tür ve değiştirilme tarihlerini indir. Dosya içerikleri okunmaz; yapay zekâ analizi veya Drive değişikliği yapılmaz.</div>
+<div class="actions"><button class="secondary" id="inventoryBtn" onclick="downloadInventory()">ENVANTERİ İNDİR</button></div>
+<div class="small" id="inventoryStatus" role="status" aria-live="polite"></div>
+</section>
+
 <section class="card">
 <details>
 <summary>Teknik ayrıntılar</summary>
@@ -193,6 +201,23 @@ async function updateAuth(){
   }
 }
 function headers(){const h={'Content-Type':'application/json'};if(token())h['X-AIPP-Panel-Token']=token();return h}
+
+async function downloadInventory(){
+  const button=document.getElementById('inventoryBtn');
+  const status=document.getElementById('inventoryStatus');
+  if(!token()){status.textContent='Önce teknik ayrıntılar bölümünden panel token bilgisini kaydet.';return}
+  button.disabled=true;button.textContent='ENVANTER ALINIYOR...';status.textContent='Drive klasörleri yalnızca dosya bilgileri için taranıyor.';
+  try{
+    const response=await fetch('/api/inventory',{headers:headers(),cache:'no-store'});
+    const data=await response.json();
+    if(!response.ok||data.ok===false)throw new Error(data.error||'Envanter alınamadı.');
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');link.href=url;link.download='aipp-drive-inventory.json';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+    status.textContent='Envanter indirildi. Toplam '+data.total_items+' klasör ve dosya kaydı listelendi.';
+  }catch(error){status.textContent='Envanter alınamadı: '+(error.message||'Bilinmeyen hata');}
+  finally{button.disabled=false;button.textContent='ENVANTERİ İNDİR'}
+}
 let suggestedTask='',currentProposal=null,lastRunState=null;
 function normalizeState(data){if(data&&data.result&&typeof data.result==='object')return data.result;if(data&&data.stdout){try{return JSON.parse(data.stdout.split(/\r?\n/).filter(Boolean).pop())}catch(_){}}return data||{}}
 function saveRunState(data){try{localStorage.setItem('aipp_last_run_state',JSON.stringify(data))}catch(_){}}
