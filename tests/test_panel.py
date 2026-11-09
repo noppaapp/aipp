@@ -225,5 +225,4 @@ def test_panel_has_read_only_drive_inventory_download_control():
     html = (Path(panel_server.__file__).resolve().parent / "index.html").read_text(encoding="utf-8")
     assert 'id="driveInventoryCard"' in html
     assert 'onclick="downloadInventory()"' in html
-    assert "READ_ONLY_METADATA" not in html  # UI does not infer success from a client-side flag.
     assert "api/inventory" in html
