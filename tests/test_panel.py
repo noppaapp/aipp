@@ -190,3 +190,29 @@ def test_panel_surfaces_runtime_job_failure_reason(monkeypatch):
     assert status.status_code == 502
     assert status.get_json()["error"] == "Drive state write failed"
     assert calls == [("/api/run", "POST"), ("/api/jobs/runtime-job-1", "GET")]
+
+
+def test_panel_inventory_requires_panel_authentication(monkeypatch):
+    monkeypatch.setattr(panel_server, "PANEL_TOKEN", "test-panel-token")
+    response = panel_server.app.test_client().get("/api/inventory")
+    assert response.status_code == 401
+
+
+def test_panel_inventory_proxies_runtime_and_returns_download(monkeypatch):
+    calls = []
+
+    def fake_runtime_request(path, method="GET", payload=None):
+        calls.append((path, method))
+        return {"ok": True, "mode": "READ_ONLY_METADATA", "total_items": 3}
+
+    monkeypatch.setattr(panel_server, "runtime_request", fake_runtime_request)
+    monkeypatch.setattr(panel_server, "PANEL_TOKEN", "test-panel-token")
+    response = panel_server.app.test_client().get(
+        "/api/inventory",
+        headers={"X-AIPP-Panel-Token": "test-panel-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["mode"] == "READ_ONLY_METADATA"
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert calls == [("/api/inventory", "GET")]
