@@ -93,3 +93,34 @@ def test_review_only_proposals_cannot_enter_authority_gate():
 
     assert state["task_lifecycle"]["NOW"] is None
     assert state["task_lifecycle"]["FUTURE"] == [review_task]
+
+
+def test_incomplete_boot_review_is_first_and_non_executable_proposal():
+    from aipp_runner import default_state, reconcile_project_intelligence
+    from project_intelligence import build_project_boot_structure_review_proposal
+
+    review = build_project_boot_structure_review_proposal(
+        "# AIPP RUNTIME BOOT\\nAIPP v1.0 runtime workspace.\\n",
+        "drive-file-id",
+    )
+    state = default_state()
+    state["task_lifecycle"]["FUTURE"].append({
+        "id": "TASK-01",
+        "title": "Older discovered task",
+        "status": "PROPOSED",
+        "source": {"file_name": "tasks.md"},
+    })
+
+    result = reconcile_project_intelligence(state, {
+        "version": "2",
+        "engine": "test",
+        "findings": [],
+        "proposals": [review],
+    })
+
+    first = result["task_lifecycle"]["FUTURE"][0]
+    assert first["source"]["finding_type"] == "workspace_review_required"
+    assert first["change_action"] == "REVIEW"
+    assert first["priority"] == 120
+    assert "external_action" not in first
+    assert "target_content" not in first
