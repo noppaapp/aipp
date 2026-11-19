@@ -171,7 +171,7 @@ def test_recovery_context_reads_only_canonical_documents(monkeypatch):
     monkeypatch.setattr(
         runtime_service, "read_file_text",
         lambda _token, info: {
-            "boot-id": "# PROJECT_BOOT: Demo\\n**Workspace Status:** ACTIVE\\n**Active State:** [READY]\\nVersion: v1.0",
+            "boot-id": "# PROJECT_BOOT: Demo\n**Workspace Status:** ACTIVE\n**Active State:** [READY]\nVersion: v1.0",
             "protocol-id": "# AIPP v1.1.1",
         }.get(info["id"]),
     )
@@ -202,7 +202,7 @@ def test_recovery_context_reads_only_canonical_documents(monkeypatch):
         include_ai=False, recovery_mode=True
     )
 
-    assert boot == "# PROJECT_BOOT: Demo\\n**Workspace Status:** ACTIVE\\n**Active State:** [READY]\\nVersion: v1.0"
+    assert boot == "# PROJECT_BOOT: Demo\n**Workspace Status:** ACTIVE\n**Active State:** [READY]\nVersion: v1.0"
     assert authority == ""
     assert candidates == []
     assert intelligence["project_scopes"]["AIPP"]["status"] == "TARGETED_RECOVERY_SCAN"
