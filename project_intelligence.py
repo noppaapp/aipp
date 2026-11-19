@@ -396,8 +396,7 @@ def build_project_boot_structure_review_proposal(boot_text, file_id):
         "status": "PROPOSED",
         "priority": 120,
         "next_action": (
-            "İnsan incelemesi gerekiyor. Drive dosyasına herhangi bir yazma yapılmadan önce doğru PROJECT_BOOT.md içeriğini doğrula. "
-            ""
+            "İnsan incelemesi gerekiyor. Drive dosyasına herhangi bir yazma yapılmadan önce doğru PROJECT_BOOT.md içeriğini doğrula."
         ),
     }
 
