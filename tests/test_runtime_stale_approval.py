@@ -208,3 +208,46 @@ def test_recovery_context_reads_only_canonical_documents(monkeypatch):
     assert intelligence["project_scopes"]["AIPP"]["status"] == "TARGETED_RECOVERY_SCAN"
     assert intelligence["project_scopes"]["NOPPA"]["status"] == "NOT_SCANNED_FOR_RECOVERY"
     assert len(intelligence["proposals"]) == 1
+
+
+def test_runtime_rejects_review_only_approval_before_writing_authority_log(monkeypatch):
+    import runtime_service
+
+    review_task = {
+        "id": "INTEL-BOOT-REVIEW",
+        "title": "PROJECT_BOOT.md incelemesi",
+        "status": "PROPOSED",
+        "change_action": "REVIEW",
+        "source": {"finding_type": "workspace_review_required"},
+    }
+    state = {
+        "status": "PROPOSAL_READY",
+        "task_lifecycle": {"NOW": None, "FUTURE": [review_task]},
+        "authority_gate": {"pending_approval": None, "pending_proposal_id": None},
+    }
+    authority_writes = []
+
+    monkeypatch.setenv("AIPP_RUNTIME_TOKEN", "test-runtime-token")
+    monkeypatch.setenv("GDRIVE_FOLDER_ID", "drive-folder")
+    monkeypatch.setattr(runtime_service, "get_access_token", lambda: "access-token")
+    monkeypatch.setattr(runtime_service, "_load_session_state", lambda: {"result": state})
+    monkeypatch.setattr(runtime_service, "read_session_state", lambda *_: {"result": state})
+    monkeypatch.setattr(runtime_service, "_save_session_state", lambda *_: None)
+    monkeypatch.setattr(
+        runtime_service,
+        "write_authority_approval",
+        lambda *args, **kwargs: authority_writes.append((args, kwargs)),
+    )
+    monkeypatch.setattr(runtime_service, "_oauth_client_fingerprint", lambda: "test-fingerprint")
+
+    response = runtime_service.app.test_client().post(
+        "/api/run",
+        headers={"X-AIPP-Runtime-Token": "test-runtime-token"},
+        json={"command": "APPROVE", "task": review_task["id"]},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["review_only"] is True
+    assert "Authority kaydı yazılmadı" in response.get_json()["error"]
+    assert authority_writes == []
+    assert state["task_lifecycle"]["NOW"] is None
