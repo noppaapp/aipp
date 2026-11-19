@@ -145,3 +145,40 @@ def test_similarity_tokens_are_precomputed_once_per_document(monkeypatch):
     project_intelligence.analyze_documents(documents)
 
     assert tokenized == [document["text"] for document in documents]
+
+
+
+def test_incomplete_project_boot_generates_review_only_proposal():
+    from project_intelligence import (
+        build_boot_version_update_proposal,
+        build_project_boot_structure_review_proposal,
+    )
+
+    boot = "# AIPP RUNTIME BOOT\\n\\nAIPP v1.0 runtime workspace.\\n"
+    review = build_project_boot_structure_review_proposal(boot, "drive-file-id")
+
+    assert review["finding_type"] == "workspace_review_required"
+    assert review["target"] == "PROJECT_BOOT.md"
+    assert "project name" in review["reason"]
+    assert "workspace status" in review["reason"]
+    assert "active state" in review["reason"]
+    assert review["requires_authority"] is True
+    assert review["status"] == "PROPOSED"
+    assert "external_action" not in review
+    assert "target_content" not in review
+
+    # Do not offer a partial version-only write against malformed canonical state.
+    assert build_boot_version_update_proposal(
+        boot, "drive-file-id", "# AIPP v1.1.1 Final"
+    ) is None
+
+
+def test_complete_project_boot_does_not_create_structure_review():
+    from project_intelligence import build_project_boot_structure_review_proposal
+
+    boot = (
+        "# PROJECT_BOOT: AIPP\\n"
+        "**Workspace Status:** ACTIVE\\n"
+        "**Active State:** [READY]\\n"
+    )
+    assert build_project_boot_structure_review_proposal(boot, "drive-file-id") is None
