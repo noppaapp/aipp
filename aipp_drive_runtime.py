@@ -323,7 +323,13 @@ def _read_zip(raw):
         chunks = []
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             for info in archive.infolist():
-                if info.is_dir() or Path(info.filename).suffix.lower() not in ZIP_TEXT_EXTENSIONS or info.file_size > 2_000_000:
+                # Archives can contain credentials even when the outer ZIP name looks harmless.
+                if (
+                    info.is_dir()
+                    or SENSITIVE_NAME_RE.search(Path(info.filename).name)
+                    or Path(info.filename).suffix.lower() not in ZIP_TEXT_EXTENSIONS
+                    or info.file_size > 2_000_000
+                ):
                     continue
                 try:
                     chunks.append(f"\n--- {info.filename} ---\n{archive.read(info).decode('utf-8-sig', errors='replace')}")
@@ -336,6 +342,11 @@ def _read_zip(raw):
 
 def read_file_text(token, file_info):
     file_id, mime = file_info["id"], file_info.get("mimeType")
+    # Enforce sensitive-name exclusion before any Drive download or export.
+    file_name = str(file_info.get("name") or "")
+    if SENSITIVE_NAME_RE.search(file_name):
+        print(f"DRIVE_FILE_CONTENT_SKIPPED reason=sensitive_filename name={file_name!r}", flush=True)
+        return None
     if mime == FOLDER_MIME:
         return None
     if mime in {GOOGLE_DOC_MIME, GOOGLE_SLIDES_MIME}:
@@ -429,7 +440,7 @@ def discover_task_candidates(token, folder_id, include_documents=False):
             "name": file_info.get("name"),
             "mimeType": mime,
             "readable": readable_flag,
-            "analyzed": readable_flag,
+            "analyzed": False,
             "modifiedTime": file_info.get("modifiedTime"),
         })
         haystack = f"{file_info.get('name', '')}\n{text or ''}"
