@@ -363,9 +363,9 @@ def project_boot_structure_issues(boot_text):
     """Return required canonical PROJECT_BOOT fields that are absent."""
     parsed = parse_project_boot_text(boot_text if isinstance(boot_text, str) else "")
     required = (
-        ("project", "project name"),
-        ("workspace_status", "workspace status"),
-        ("active_state", "active state"),
+        ("project", "proje adı"),
+        ("workspace_status", "çalışma alanı durumu"),
+        ("active_state", "aktif durum"),
     )
     return [label for key, label in required if not str(parsed.get(key) or "").strip()]
 
@@ -376,14 +376,14 @@ def build_project_boot_structure_review_proposal(boot_text, file_id):
     if not missing or not file_id:
         return None
     quote = " ".join(str(boot_text or "").split())[:500]
-    reason = "Canonical PROJECT_BOOT.md is missing required fields: " + ", ".join(missing) + "."
+    reason = "Drive’daki kanonik PROJECT_BOOT.md içinde şu alanlar eksik: " + ", ".join(missing) + "."
     return {
         "action": "REVIEW",
         "target": "PROJECT_BOOT.md",
         "reason": reason,
         "recommendation": (
-            "Review and restore the canonical project name, workspace status, and active state. "
-            "Do not apply a version-only update to an incomplete project-state document."
+            "PROJECT_BOOT.md içindeki proje adını, çalışma alanı durumunu ve aktif durumu doğrula. "
+            "Eksik belgeye yalnızca sürüm numarasını değiştirerek yazma yapma."
         ),
         "finding_type": "workspace_review_required",
         "evidence": [{
@@ -396,8 +396,7 @@ def build_project_boot_structure_review_proposal(boot_text, file_id):
         "status": "PROPOSED",
         "priority": 120,
         "next_action": (
-            "Human review is required. Confirm the correct canonical PROJECT_BOOT.md content "
-            "before any Drive write is proposed."
+            "İnsan incelemesi gerekiyor. Drive dosyasına herhangi bir yazma yapılmadan önce doğru PROJECT_BOOT.md içeriğini doğrula."
         ),
     }
 

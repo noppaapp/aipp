@@ -226,3 +226,13 @@ def test_panel_has_read_only_drive_inventory_download_control():
     assert 'id="driveInventoryCard"' in html
     assert 'onclick="downloadInventory()"' in html
     assert "api/inventory" in html
+
+
+def test_panel_blocks_approval_for_review_only_project_boot_proposals():
+    from pathlib import Path
+
+    html = (Path(panel_server.__file__).resolve().parent / "index.html").read_text(encoding="utf-8")
+    assert "function isReviewOnlyProposal(p)" in html
+    assert "if(isReviewOnlyProposal(currentProposal)){showReview();return;}" in html
+    assert "AIPP bu kaydı onaylatmaz veya otomatik değiştirmez." in html
+    assert "İNCELEME GEREKİYOR" in html

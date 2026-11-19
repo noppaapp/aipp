@@ -159,9 +159,9 @@ def test_incomplete_project_boot_generates_review_only_proposal():
 
     assert review["finding_type"] == "workspace_review_required"
     assert review["target"] == "PROJECT_BOOT.md"
-    assert "project name" in review["reason"]
-    assert "workspace status" in review["reason"]
-    assert "active state" in review["reason"]
+    assert "proje adı" in review["reason"]
+    assert "çalışma alanı durumu" in review["reason"]
+    assert "aktif durum" in review["reason"]
     assert review["requires_authority"] is True
     assert review["status"] == "PROPOSED"
     assert "external_action" not in review
