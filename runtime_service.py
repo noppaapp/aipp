@@ -500,6 +500,16 @@ RUNTIME_JOBS = {}
 RUNTIME_JOBS_LOCK = threading.Lock()
 
 
+def _is_review_only_task(task):
+    if not isinstance(task, dict):
+        return False
+    finding_type = (task.get("source") or {}).get("finding_type")
+    return (
+        finding_type in {"workspace_review_required", "project_boot_incomplete", "actionable_untracked_idea"}
+        or str(task.get("change_action") or "").upper() == "REVIEW"
+    )
+
+
 def _execute_run(body):
     try:
         command = str(body.get("command") or "BAŞLA").upper()
@@ -724,6 +734,18 @@ def _execute_run(body):
                     "error": (
                         f"Öneri {task} artık güncel değil. Onay verilmedi ve hiçbir tarama başlatılmadı. "
                         "Çalışma alanını yenilemek için BAŞLAT düğmesine bas; sonra güncel öneriyi incele."
+                    ),
+                    "oauth_client_fingerprint": _oauth_client_fingerprint(),
+                }), 409
+            if _is_review_only_task(approved_task):
+                return jsonify({
+                    "ok": False,
+                    "command": command,
+                    "task": task,
+                    "review_only": True,
+                    "error": (
+                        "Bu kayıt yalnızca inceleme içindir. Authority kaydı yazılmadı "
+                        "ve yürütme yapılmadı."
                     ),
                     "oauth_client_fingerprint": _oauth_client_fingerprint(),
                 }), 409
