@@ -386,6 +386,16 @@ def find_future_task(state, task_id):
     return next((task for task in state["task_lifecycle"].get("FUTURE", []) if task.get("id") == task_id), None)
 
 
+def _is_review_only_task(task):
+    if not isinstance(task, dict):
+        return False
+    finding_type = (task.get("source") or {}).get("finding_type")
+    return (
+        finding_type in {"workspace_review_required", "project_boot_incomplete", "actionable_untracked_idea"}
+        or str(task.get("change_action") or "").upper() == "REVIEW"
+    )
+
+
 def request_approval(state, task_id):
     task = find_future_task(state, task_id)
     if task is None:
@@ -396,6 +406,10 @@ def request_approval(state, task_id):
         ]
         raise RuntimeError(
             f"HALT: FUTURE task not found: {task_id} (current FUTURE ids: {current}). Re-run BAŞLA."
+        )
+    if _is_review_only_task(task):
+        raise RuntimeError(
+            "HALT: Bu kayıt yalnızca inceleme içindir. Onay kaydı oluşturulmadı ve yürütme yapılmadı."
         )
     state["authority_gate"]["pending_approval"] = task_id
     state["authority_gate"]["pending_proposal_id"] = proposal_id(task)
@@ -411,6 +425,10 @@ def approve_task(state, task_id, authority_log=None):
     task = find_future_task(state, task_id)
     if task is None:
         raise RuntimeError(f"HALT: Task disappeared from FUTURE: {task_id}")
+    if _is_review_only_task(task):
+        raise RuntimeError(
+            "HALT: Bu kayıt yalnızca inceleme içindir. Onay kaydı oluşturulmadı ve yürütme yapılmadı."
+        )
     expected_proposal = state["authority_gate"].get("pending_proposal_id")
     actual_proposal = proposal_id(task)
     if expected_proposal != actual_proposal:
