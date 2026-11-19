@@ -383,26 +383,43 @@ def read_file_text(token, file_info):
     return None
 
 
-def publish_boot_to_runtime_env(text):
-    """Pass canonical Drive content through the ephemeral Actions environment."""
-    encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
+def _publish_env_value(name, value, label, missing_message):
+    """Publish an ephemeral Actions variable and mask its value in job logs."""
+    encoded = base64.b64encode(value.encode("utf-8")).decode("ascii")
     env_file = os.environ.get("GITHUB_ENV")
     if not env_file:
-        raise RuntimeError("HALT: GITHUB_ENV is unavailable; refusing to materialize PROJECT_BOOT.md on disk")
+        raise RuntimeError(missing_message)
+    # GITHUB_ENV values are available to later steps. Mask them first because
+    # Actions may print step environments in logs, and this repository is public.
+    print(f"::add-mask::{encoded}", flush=True)
     with open(env_file, "a", encoding="utf-8") as handle:
-        handle.write(f"AIPP_PROJECT_BOOT_B64={encoded}\n")
-    print("DRIVE_CANONICAL_STATE_PUBLISHED transport=GITHUB_ENV storage=ephemeral")
+        handle.write(f"{name}={encoded}\n")
+    print(f"{label}_PUBLISHED transport=GITHUB_ENV storage=ephemeral", flush=True)
+
+
+def publish_boot_to_runtime_env(text):
+    """Pass canonical Drive content through the ephemeral Actions environment."""
+    _publish_env_value(
+        "AIPP_PROJECT_BOOT_B64", text, "DRIVE_CANONICAL_STATE",
+        "HALT: GITHUB_ENV is unavailable; refusing to materialize PROJECT_BOOT.md on disk",
+    )
 
 
 def publish_authority_to_runtime_env(text):
     """Pass canonical human authority decisions through ephemeral Actions transport."""
-    encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
-    env_file = os.environ.get("GITHUB_ENV")
-    if not env_file:
-        raise RuntimeError("HALT: GITHUB_ENV is unavailable; refusing to materialize AUTHORITY_LOG.md on disk")
-    with open(env_file, "a", encoding="utf-8") as handle:
-        handle.write(f"AIPP_AUTHORITY_LOG_B64={encoded}\n")
-    print("DRIVE_AUTHORITY_PUBLISHED transport=GITHUB_ENV storage=ephemeral")
+    _publish_env_value(
+        "AIPP_AUTHORITY_LOG_B64", text, "DRIVE_AUTHORITY",
+        "HALT: GITHUB_ENV is unavailable; refusing to materialize AUTHORITY_LOG.md on disk",
+    )
+
+
+def publish_task_candidates_to_runtime_env(candidates):
+    """Pass discovered task metadata through the masked ephemeral Actions environment."""
+    value = json.dumps(candidates, ensure_ascii=False, separators=(",", ":"))
+    _publish_env_value(
+        "AIPP_DISCOVERED_TASKS_B64", value, "DRIVE_TASK_CANDIDATES",
+        "HALT: GITHUB_ENV is unavailable; refusing to materialize discovered Drive tasks on disk",
+    )
 
 
 def discover_task_candidates(token, folder_id, include_documents=False):
