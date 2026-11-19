@@ -109,11 +109,11 @@ def test_boot_version_update_proposal_binds_exact_content_and_expected_hash():
     import hashlib
     from project_intelligence import build_boot_version_update_proposal
 
-    boot = "# AIPP v1.0 runtime workspace\\nStatus: ACTIVE\\n"
+    boot = "# PROJECT_BOOT: AIPP\n**Workspace Status:** ACTIVE\n**Active State:** [READY]\nVersion: v1.0\n"
     proposal = build_boot_version_update_proposal(boot, "drive-file-identifier-123", "# AIPP v1.1.1 Final")
     assert proposal["external_action"] == "GDRIVE_PROJECT_BOOT_TEXT"
     assert proposal["target_file_id"] == "drive-file-identifier-123"
-    assert proposal["target_content"] == "# AIPP v1.1.1 runtime workspace\\nStatus: ACTIVE\\n"
+    assert proposal["target_content"] == "# PROJECT_BOOT: AIPP\n**Workspace Status:** ACTIVE\n**Active State:** [READY]\nVersion: v1.1.1\n"
     assert proposal["target_expected_sha256"] == hashlib.sha256(boot.encode()).hexdigest()
     assert proposal["requires_authority"] is True
 
@@ -154,7 +154,7 @@ def test_incomplete_project_boot_generates_review_only_proposal():
         build_project_boot_structure_review_proposal,
     )
 
-    boot = "# AIPP RUNTIME BOOT\\n\\nAIPP v1.0 runtime workspace.\\n"
+    boot = "# AIPP RUNTIME BOOT\n\nAIPP v1.0 runtime workspace.\n"
     review = build_project_boot_structure_review_proposal(boot, "drive-file-id")
 
     assert review["finding_type"] == "workspace_review_required"
@@ -177,8 +177,8 @@ def test_complete_project_boot_does_not_create_structure_review():
     from project_intelligence import build_project_boot_structure_review_proposal
 
     boot = (
-        "# PROJECT_BOOT: AIPP\\n"
-        "**Workspace Status:** ACTIVE\\n"
-        "**Active State:** [READY]\\n"
+        "# PROJECT_BOOT: AIPP\n"
+        "**Workspace Status:** ACTIVE\n"
+        "**Active State:** [READY]\n"
     )
     assert build_project_boot_structure_review_proposal(boot, "drive-file-id") is None
