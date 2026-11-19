@@ -9,6 +9,8 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from aipp_project_bootstrap import parse_project_boot_text
+
 TASK_RE = re.compile(r"\bTASK[-_ ]?\d+\b", re.IGNORECASE)
 TABLE_TASK_RE = re.compile(
     r"\|\s*[`*]*(TASK[-_ ]?\d+)[`*]*\s*\|\s*([^|]+?)\s*\|\s*[`*]*([A-Z][A-Z _-]+?)[`*]*\s*\|",
@@ -357,9 +359,57 @@ def analyze_documents(documents):
     }
 
 
+def project_boot_structure_issues(boot_text):
+    """Return required canonical PROJECT_BOOT fields that are absent."""
+    parsed = parse_project_boot_text(boot_text if isinstance(boot_text, str) else "")
+    required = (
+        ("project", "project name"),
+        ("workspace_status", "workspace status"),
+        ("active_state", "active state"),
+    )
+    return [label for key, label in required if not str(parsed.get(key) or "").strip()]
+
+
+def build_project_boot_structure_review_proposal(boot_text, file_id):
+    """Create a non-executable review proposal when the canonical boot is incomplete."""
+    missing = project_boot_structure_issues(boot_text)
+    if not missing or not file_id:
+        return None
+    quote = " ".join(str(boot_text or "").split())[:500]
+    reason = "Canonical PROJECT_BOOT.md is missing required fields: " + ", ".join(missing) + "."
+    return {
+        "action": "REVIEW",
+        "target": "PROJECT_BOOT.md",
+        "reason": reason,
+        "recommendation": (
+            "Review and restore the canonical project name, workspace status, and active state. "
+            "Do not apply a version-only update to an incomplete project-state document."
+        ),
+        "finding_type": "workspace_review_required",
+        "evidence": [{
+            "file_name": "PROJECT_BOOT.md",
+            "file_id": file_id,
+            "quote": quote,
+            "source": "Google Drive",
+        }],
+        "requires_authority": True,
+        "status": "PROPOSED",
+        "priority": 120,
+        "next_action": (
+            "Human review is required. Confirm the correct canonical PROJECT_BOOT.md content "
+            "before any Drive write is proposed."
+        ),
+    }
+
+
 def build_boot_version_update_proposal(boot_text, file_id, protocol_text):
     """Prepare a passive, exact-content proposal for the single known v1.0 -> v1.1.1 drift."""
-    if not isinstance(boot_text, str) or not file_id or "v1.1.1" not in (protocol_text or ""):
+    if (
+        not isinstance(boot_text, str)
+        or not file_id
+        or "v1.1.1" not in (protocol_text or "")
+        or project_boot_structure_issues(boot_text)
+    ):
         return None
     matches = list(re.finditer(r"(?<![A-Za-z0-9.])v1\.0(?![0-9.])", boot_text))
     if len(matches) != 1:

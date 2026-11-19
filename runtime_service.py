@@ -25,7 +25,11 @@ from aipp_drive_runtime import (
     list_workspace_inventory,
     get_credentials,
 )
-from project_intelligence import analyze_documents, build_boot_version_update_proposal
+from project_intelligence import (
+    analyze_documents,
+    build_boot_version_update_proposal,
+    build_project_boot_structure_review_proposal,
+)
 from project_intelligence_ai import analyze_with_ai
 
 app = Flask(__name__)
@@ -174,6 +178,14 @@ def _drive_context(include_ai=True, recovery_mode=False):
                 "reason": "targeted recovery does not call semantic AI",
             },
         }
+        boot_review = build_project_boot_structure_review_proposal(boot_text, boot_info.get("id"))
+        if boot_review:
+            intelligence["findings"].append({
+                "type": "project_boot_incomplete",
+                "file_name": "PROJECT_BOOT.md",
+                "evidence": boot_review["evidence"],
+            })
+            intelligence["proposals"].append(boot_review)
         boot_proposal = build_boot_version_update_proposal(
             boot_text, boot_info.get("id"), protocol_text
         )
@@ -272,8 +284,17 @@ def _drive_context(include_ai=True, recovery_mode=False):
     else:
         intelligence["semantic"] = {"enabled": False, "available": False, "reason": "status endpoint does not run AI"}
 
-    # Create a passive proposal only when the canonical protocol confirms v1.1.1
-    # and PROJECT_BOOT has exactly one v1.0 marker.
+    # A malformed canonical boot must be reviewed before any version-only update is proposed.
+    boot_review = build_project_boot_structure_review_proposal(boot_text, boot_info.get("id"))
+    if boot_review:
+        intelligence["findings"].append({
+            "type": "project_boot_incomplete",
+            "file_name": "PROJECT_BOOT.md",
+            "evidence": boot_review["evidence"],
+        })
+        intelligence["proposals"].append(boot_review)
+
+    # Create a passive version proposal only when the canonical boot structure is valid.
     protocol_text = next((doc.get("text", "") for doc in documents if doc.get("name") == "AIPP.md"), "")
     boot_proposal = build_boot_version_update_proposal(boot_text, boot_info.get("id"), protocol_text)
     if boot_proposal:
