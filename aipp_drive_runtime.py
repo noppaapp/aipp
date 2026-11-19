@@ -570,7 +570,10 @@ def main():
     else:
         publish_authority_to_runtime_env("")
 
+    # Publish candidates from this scan. The workflow must not rescan Drive
+    # in a second bridge step, which can time out on the same large workspace.
     candidates = discover_task_candidates(token, folder_id)
+    publish_task_candidates_to_runtime_env(candidates)
     print(f"DRIVE_RECONCILIATION_READY candidates={len(candidates)} authority_gate=REQUIRED")
     print("DRIVE_CANONICAL_STATE_READY source=PROJECT_BOOT.md authority_source=AUTHORITY_LOG.md runtime_state=purely_ephemeral")
 
