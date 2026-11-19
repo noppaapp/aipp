@@ -42,7 +42,6 @@ def test_discovered_task_payload_is_masked_before_github_env_publish(tmp_path, m
 
     aipp_drive_task_bridge.main()
 
-    expected = json.dumps(candidates, ensure_ascii=False)
     # The shared publisher uses compact JSON for deterministic transport.
     compact = json.dumps(candidates, ensure_ascii=False, separators=(",", ":"))
     encoded = base64.b64encode(compact.encode("utf-8")).decode("ascii")
