@@ -233,6 +233,7 @@ def test_panel_blocks_approval_for_review_only_project_boot_proposals():
 
     html = (Path(panel_server.__file__).resolve().parent / "index.html").read_text(encoding="utf-8")
     assert "function isReviewOnlyProposal(p)" in html
+    assert "actionable_untracked_idea" in html
     assert "if(isReviewOnlyProposal(currentProposal)){showReview();return;}" in html
     assert "AIPP bu kaydı onaylatmaz veya otomatik değiştirmez." in html
     assert "İNCELEME GEREKİYOR" in html
