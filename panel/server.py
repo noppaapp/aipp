@@ -228,12 +228,20 @@ def config_status():
     auth_error = require_panel_token()
     if auth_error:
         return auth_error
+    readiness = None
+    try:
+        readiness = runtime_request('/api/diagnostics')
+    except Exception as exc:
+        # Keep panel authentication diagnostics usable while the free runtime
+        # is asleep or temporarily unavailable. Never expose secret values.
+        readiness = {'ok': False, 'error_type': type(exc).__name__}
     return jsonify({
         'ok': True,
         'runtime_url_configured': bool(RUNTIME_URL),
         'runtime_token_configured': bool(RUNTIME_TOKEN),
         'panel_token_configured': bool(PANEL_TOKEN),
         'runtime_token_fingerprint': fingerprint(RUNTIME_TOKEN),
+        'provider_readiness': readiness,
     })
 
 if __name__ == '__main__':
