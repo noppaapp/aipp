@@ -99,6 +99,7 @@ def test_project_intelligence_persists_drive_scan_for_panel_state():
             "folders_scanned": 2,
         },
         "semantic": {"enabled": False, "available": False},
+        "project_semantic": {"NOPPA": {"enabled": True, "available": False, "status": "UNAVAILABLE"}},
     }
 
     state = reconcile_project_intelligence(default_state(), intelligence)
@@ -106,6 +107,7 @@ def test_project_intelligence_persists_drive_scan_for_panel_state():
     assert state["project_intelligence"]["drive_scan"]["files_scanned"] == 15
     assert state["project_intelligence"]["drive_scan"]["documents_read"] == 15
     assert state["project_intelligence"]["documents_scanned"] == 15
+    assert state["project_intelligence"]["project_semantic"]["NOPPA"]["status"] == "UNAVAILABLE"
 
 
 def test_verification_always_requires_human_completion_authority(tmp_path, monkeypatch):
