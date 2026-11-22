@@ -254,6 +254,7 @@ def reconcile_project_intelligence(state, intelligence):
         "queue_count": len(future),
         "drive_scan": intelligence.get("drive_scan", {}),
         "semantic": intelligence.get("semantic", {}),
+        "project_semantic": intelligence.get("project_semantic", {}),
         "queue": [{"id":x.get("id"),"title":x.get("title"),"priority":x.get("priority",50),"finding_type":x.get("source",{}).get("finding_type")} for x in future],
     }
     if intelligence.get("proposals"):
