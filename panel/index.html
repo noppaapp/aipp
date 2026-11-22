@@ -297,7 +297,7 @@ function explainProposal(p){
 }
 
 function isApprovedProposal(p){return !!(p&&String(p.status||'').toUpperCase()==='APPROVED')}
-function isReviewOnlyProposal(p){const type=[p?.finding_type,p?.source?.finding_type].filter(Boolean).join(' ');return /workspace_review_required|project_boot_incomplete/i.test(type)}
+function isReviewOnlyProposal(p){const type=[p?.finding_type,p?.source?.finding_type].filter(Boolean).join(' ');return /workspace_review_required|project_boot_incomplete|actionable_untracked_idea/i.test(type)}
 function showReview(){
   if(!currentProposal)return;
   setVisible('decisionCard',false);setVisible('waitingCard',false);setVisible('reviewCard',true);
