@@ -46,6 +46,23 @@ def test_actionable_idea_without_task_id_becomes_passive_proposal():
     proposal = next(p for p in result["proposals"] if p["finding_type"] == "actionable_untracked_idea")
     assert proposal["requires_authority"] is True
     assert proposal["status"] == "PROPOSED"
+    assert proposal["next_action"]
+    assert "TASK" in proposal["next_action"]
+
+
+def test_code_heavy_pdf_export_is_not_misclassified_as_actionable_idea():
+    source = """/* Next step: add a responsive layout */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body, html { background-color: #050505; color: #7a7a7a; }
+.stage { width: 100%; max-width: 450px; height: 100%; }
+@media (max-width: 600px) { .stage { width: 100%; } }
+"""
+    result = analyze_documents([
+        {"id": "pdf-code-1", "name": "indexhtml-export.pdf",
+         "mimeType": "application/pdf", "text": source},
+    ])
+    assert result["evidence"][0]["kind"] == "artifact"
+    assert not any(p["finding_type"] == "actionable_untracked_idea" for p in result["proposals"])
 
 
 def test_near_duplicate_is_flagged():

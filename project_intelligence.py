@@ -33,12 +33,24 @@ ARTIFACT_EXTENSIONS = {".zip", ".py", ".js", ".ts", ".toml", ".yaml", ".yml", ".
 CANONICAL = {"PROJECT_BOOT.md": "project_state", "AIPP.md": "protocol"}
 
 
+def _looks_like_code(text):
+    """Reject code-heavy exports as idea sources; code keywords are not tasks."""
+    value = str(text or "")
+    if len(re.findall(r"[{};<>]", value)) < 8:
+        return False
+    words = max(1, len(re.findall(r"\b[\w-]+\b", value)))
+    markers = len(re.findall(r"[{};<>]", value))
+    return markers / words >= 0.035
+
+
 def _kind(name, text):
     if name in CANONICAL:
         return CANONICAL[name]
     lower = name.lower()
     suffix = Path(name).suffix.lower()
-    if suffix in ARTIFACT_EXTENSIONS:
+    if suffix in ARTIFACT_EXTENSIONS or suffix in {".html", ".htm", ".css", ".scss", ".tsx", ".jsx", ".sql", ".sh"}:
+        return "artifact"
+    if _looks_like_code(text):
         return "artifact"
     for kind, words in KIND_WORDS.items():
         if any(word in lower for word in words):
@@ -311,9 +323,15 @@ def analyze_documents(documents):
             excerpt=_excerpt(text, action_match.group(0) if action_match else None),
         )]
         findings.append({"type": "actionable_untracked_idea", "file_name": doc["name"], "evidence": evidence})
+        next_action = (
+            "Belgedeki öneriyi proje hedefleri ve güncel kararlarla karşılaştır. "
+            "Uygun bulunursa ayrı bir TASK tanımla; bu inceleme kaydı tek başına "
+            "dosya değişikliği veya uygulama yetkisi vermez."
+        )
         proposals.append({
             "action": "REVIEW", "target": doc["name"], "reason": reason,
             "finding_type": "actionable_untracked_idea", "evidence": evidence,
+            "next_action": next_action, "recommendation": next_action,
             "requires_authority": True, "status": "PROPOSED",
         })
 
