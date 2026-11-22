@@ -450,6 +450,28 @@ def status():
 
 
 
+@app.get("/api/diagnostics")
+def diagnostics():
+    """Authenticated, read-only readiness flags; never returns secret values."""
+    auth_error = _require_runtime_token()
+    if auth_error:
+        return auth_error
+    providers = {
+        "gemini": bool(os.environ.get("GEMINI_API_KEY", "").strip()),
+        "groq": bool(os.environ.get("GROQ_API_KEY", "").strip()),
+        "openrouter": bool(os.environ.get("OPENROUTER_API_KEY", "").strip()),
+        "claude": bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()),
+    }
+    return jsonify({
+        "ok": True,
+        "semantic_analysis_enabled": os.environ.get("AIPP_SEMANTIC_ANALYSIS", "").strip().lower() in {"1", "true", "yes", "on"},
+        "providers": providers,
+        "configured_provider_count": sum(providers.values()),
+        "fallback_order": ["gemini", "groq", "openrouter", "claude"],
+        "noppa_drive_configured": bool(os.environ.get("NOPPA_GDRIVE_FOLDER_ID", "").strip()),
+    })
+
+
 @app.get("/api/inventory")
 def inventory():
     """Authenticated, read-only metadata inventory for configured Drive roots."""
