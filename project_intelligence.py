@@ -38,7 +38,7 @@ def _looks_like_code(text):
     value = str(text or "")
     if len(re.findall(r"[{};<>]", value)) < 8:
         return False
-    words = max(1, len(re.findall(r"\\b[\\w-]+\\b", value)))
+    words = max(1, len(re.findall(r"\b[\w-]+\b", value)))
     markers = len(re.findall(r"[{};<>]", value))
     return markers / words >= 0.035
 
